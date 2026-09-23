@@ -21,10 +21,10 @@ const EMPTY_SNAPSHOT = {
   bluetooth: { connected: false, device_name: '' },
 };
 
-// Single WebSocket connection to the star-replica-daemon dashboard channel.
+// Single WebSocket connection to the device control channel (/api/ws).
 //
-// The daemon pushes a full state snapshot on connect and after every change
-// (see StarServer::broadcastSnapshot). `send()` is the one command envelope
+// The device pushes a full state snapshot on connect and after every change
+// (see ControlChannel::pushState). `send()` is the one command envelope
 // for everything with live device state: {"cmd": "<name>", ...}. Read-only,
 // one-shot operations (search, library ops, alert chime) don't go through
 // this - see lib/api.js.

@@ -1,55 +1,66 @@
 // Host configuration + REST calls.
 //
-// Two upstream hosts:
-//  - ESP host: the Waveshare device's own native HTTP server. Used only for
-//    genuinely one-shot, non-realtime operations that live on the device
-//    itself: SD library scan/list/delete.
-//  - Daemon host (star-replica-daemon): the control-plane gateway. Used for
-//    reading a one-shot status snapshot, and as the WebSocket endpoint for
-//    all live device control (see lib/ws.js).
+// Single gateway: the Nexus device itself (advertised over mDNS as nexus.local).
+// Live state/commands go over its WebSocket (/api/ws, one client at a time,
+// newest connection takes over); one-shot operations (SD library, alert chime,
+// direct stream playback) use its REST API.
 //
-// Search + stream-URL resolution hit a third host (the Invidious-compatible
-// stream resolver) directly from the browser - it never touches the ESP or
-// the daemon.
+// Search + stream-URL resolution hit the Invidious-compatible stream resolver
+// directly from the browser.
 
-const DEFAULT_ESP_HOST = '192.168.1.14';
-const DEFAULT_DAEMON_HOST = 'localhost:8765';
+// The device build (`npm run bundle`, served by the ESP itself) talks to the
+// host it was loaded from; dev/Docker builds default to the mDNS name.
+const DEFAULT_GATEWAY_HOST = import.meta.env.MODE === 'device' ? window.location.host : 'nexus.local';
 const STREAM_API_BASE = 'https://stream.ankitm.xyz/api/v1';
 
 function cleanHost(host) {
   return host.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-export function getEspHost() {
-  return localStorage.getItem('esp_host') || DEFAULT_ESP_HOST;
+export function getGatewayHost() {
+  return localStorage.getItem('gateway_host') ||
+         localStorage.getItem('daemon_host') ||
+         DEFAULT_GATEWAY_HOST;
 }
 
-export function setEspHost(host) {
+export function setGatewayHost(host) {
   const clean = cleanHost(host);
+  localStorage.setItem('gateway_host', clean);
+  localStorage.setItem('daemon_host', clean);
   localStorage.setItem('esp_host', clean);
   return clean;
 }
 
-export function getEspBaseUrl() {
-  return `http://${getEspHost()}`;
+export function getEspHost() {
+  return getGatewayHost();
+}
+
+export function setEspHost(host) {
+  return setGatewayHost(host);
 }
 
 export function getDaemonHost() {
-  return localStorage.getItem('daemon_host') || DEFAULT_DAEMON_HOST;
+  return getGatewayHost();
 }
 
 export function setDaemonHost(host) {
-  const clean = cleanHost(host);
-  localStorage.setItem('daemon_host', clean);
-  return clean;
+  return setGatewayHost(host);
+}
+
+export function getGatewayBaseUrl() {
+  return `http://${getGatewayHost()}`;
+}
+
+export function getEspBaseUrl() {
+  return getGatewayBaseUrl();
 }
 
 export function getDaemonBaseUrl() {
-  return `http://${getDaemonHost()}`;
+  return getGatewayBaseUrl();
 }
 
 export function getDaemonWsUrl() {
-  return `ws://${getDaemonHost()}/api/dashboard/ws`;
+  return `ws://${getGatewayHost()}/api/ws`;
 }
 
 async function fetchJson(url, opts) {
@@ -103,6 +114,20 @@ export async function playLocalOnEsp(idOrPath) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: idOrPath }),
+  });
+}
+
+export async function playStreamOnEsp(track, streamUrl) {
+  return fetchJson(`${getEspBaseUrl()}/api/music/play`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      stream_url: streamUrl,
+      id: track.id || track.videoId || '',
+      title: track.title || 'Unknown Title',
+      artist: track.artist || track.author || 'Unknown Artist',
+      duration: track.duration || track.lengthSeconds || 0,
+    }),
   });
 }
 

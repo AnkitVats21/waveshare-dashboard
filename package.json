@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bundle": "vite build --mode device && python3 ../waveshare/tools/webbundle/mkbundle.py dist -o nexus-web.bin",
+    "deploy": "vite build --mode device && python3 ../waveshare/tools/webbundle/mkbundle.py dist -o nexus-web.bin --upload http://${NEXUS_HOST:-192.168.1.14}"
   },
   "dependencies": {
     "clsx": "^2.1.1",

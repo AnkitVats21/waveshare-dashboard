@@ -9,7 +9,7 @@ export default function Header({ espHost, onHostChange, online, deviceConnected,
     onHostChange(localHost);
   };
 
-  const statusLabel = !online ? 'Daemon offline' : deviceConnected ? 'Device online' : 'Daemon online, device offline';
+  const statusLabel = !online ? 'Device offline' : deviceConnected ? 'Device online' : 'Connecting...';
   const statusClass = !online ? 'dot-offline' : deviceConnected ? 'dot-online' : 'dot-partial';
 
   return (
@@ -28,8 +28,8 @@ export default function Header({ espHost, onHostChange, online, deviceConnected,
             type="text"
             value={localHost}
             onChange={(e) => setLocalHost(e.target.value)}
-            placeholder="ESP32 IP"
-            title="ESP32 IP address or hostname"
+            placeholder="Device host"
+            title="Device IP or hostname (e.g. 192.168.1.14 or nexus.local)"
           />
           <button type="submit" title="Save & connect">
             <Link size={15} />

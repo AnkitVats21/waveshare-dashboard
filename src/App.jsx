@@ -7,7 +7,7 @@ import NowPlayingDock from './components/NowPlayingDock';
 import DevLogs from './components/DevLogs';
 import { useStarSocket } from './hooks/useStarSocket';
 import { usePendingValue } from './hooks/usePendingValue';
-import { getEspHost, setEspHost } from './lib/api';
+import { getEspHost, setEspHost, playStreamOnEsp } from './lib/api';
 
 const ledEqual = (a, b) =>
   a.mode === b.mode && a.speed_ms === b.speed_ms &&
@@ -52,9 +52,14 @@ export default function App() {
     speed_ms: v.speed_ms,
   }), ledEqual);
 
-  const handlePlay = useCallback((track, streamUrl) => {
+  const handlePlay = useCallback(async (track, streamUrl) => {
     setOptimisticTrack(track);
-    send('action', { action: 'play', data: streamUrl });
+    try {
+      await playStreamOnEsp(track, streamUrl);
+    } catch (err) {
+      console.warn('Direct stream playback API failed, falling back to WS action:', err);
+      send('action', { action: 'play', data: track.id || track.title });
+    }
   }, [send]);
 
   const handlePlayLocal = useCallback((track) => {
