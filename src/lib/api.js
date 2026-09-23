@@ -5,6 +5,8 @@
 // OTA, logs) uses the REST API below. Search and stream-URL resolution hit the
 // Invidious-compatible resolver directly from the browser.
 
+import { CATALOG_PATH, filterTracks, parseCatalog } from './catalog';
+
 // The device build (`npm run bundle`, served by the ESP itself) talks to the
 // host it was loaded from; dev builds default to the fixed LAN address.
 const DEFAULT_HOST = import.meta.env.MODE === 'device' ? window.location.host : '192.168.1.14';
@@ -88,8 +90,23 @@ export async function resolveStreamUrl(videoId) {
 
 // ── Music ──────────────────────────────────────────────────────────────────
 
-export const getLibrary = (filter = '') =>
-  request(`/api/music/library${filter ? `?${q({ q: filter })}` : ''}`);
+// The library is the raw catalog file, parsed here (lib/catalog.js).
+// Filtering reuses the last fetch.
+let libraryCache = null;
+
+export async function getLibrary(filter = '') {
+  if (!filter || !libraryCache) {
+    const res = await fetch(`${base()}/api/files/download?${q({ path: CATALOG_PATH })}`);
+    if (res.status === 404) {
+      libraryCache = [];
+    } else if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    } else {
+      libraryCache = parseCatalog(await res.arrayBuffer());
+    }
+  }
+  return filterTracks(libraryCache, filter);
+}
 export const scanLibrary = () => request('/api/music/library/scan', { method: 'POST' });
 export const deleteFromLibrary = (id) => request(`/api/music/library?${q({ id })}`, { method: 'DELETE' });
 export const playLocal = (idOrPath) => request('/api/music/play_local', { method: 'POST', json: { id: idOrPath } });
