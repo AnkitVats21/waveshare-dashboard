@@ -1,152 +1,166 @@
-// Host configuration + REST calls.
+// Device host + REST calls.
 //
-// Single gateway: the Nexus device itself (advertised over mDNS as nexus.local).
-// Live state/commands go over its WebSocket (/api/ws, one client at a time,
-// newest connection takes over); one-shot operations (SD library, alert chime,
-// direct stream playback) use its REST API.
-//
-// Search + stream-URL resolution hit the Invidious-compatible stream resolver
-// directly from the browser.
+// Live state and commands go over the device WebSocket (/api/ws, see
+// hooks/useDevice.js). Everything one-shot (library, alarms, config, files,
+// OTA, logs) uses the REST API below. Search and stream-URL resolution hit the
+// Invidious-compatible resolver directly from the browser.
 
 // The device build (`npm run bundle`, served by the ESP itself) talks to the
-// host it was loaded from; dev/Docker builds default to the mDNS name.
-const DEFAULT_GATEWAY_HOST = import.meta.env.MODE === 'device' ? window.location.host : 'nexus.local';
+// host it was loaded from; dev builds default to the fixed LAN address.
+const DEFAULT_HOST = import.meta.env.MODE === 'device' ? window.location.host : '192.168.1.14';
 const STREAM_API_BASE = 'https://stream.ankitm.xyz/api/v1';
+const HOST_KEY = 'nexus_host';
+
+export const isDeviceBuild = import.meta.env.MODE === 'device';
 
 function cleanHost(host) {
-  return host.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  return host.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-export function getGatewayHost() {
-  return localStorage.getItem('gateway_host') ||
-         localStorage.getItem('daemon_host') ||
-         DEFAULT_GATEWAY_HOST;
+export function getHost() {
+  try {
+    return localStorage.getItem(HOST_KEY) || DEFAULT_HOST;
+  } catch {
+    return DEFAULT_HOST;
+  }
 }
 
-export function setGatewayHost(host) {
+export function setHost(host) {
   const clean = cleanHost(host);
-  localStorage.setItem('gateway_host', clean);
-  localStorage.setItem('daemon_host', clean);
-  localStorage.setItem('esp_host', clean);
+  try {
+    localStorage.setItem(HOST_KEY, clean);
+  } catch {
+    // Private mode: the choice just won't persist.
+  }
   return clean;
 }
 
-export function getEspHost() {
-  return getGatewayHost();
+const base = () => `http://${getHost()}`;
+export const wsUrl = () => `ws://${getHost()}/api/ws`;
+
+async function request(path, { method = 'GET', json, body, headers, raw = false } = {}) {
+  const opts = { method, headers: { ...headers } };
+  if (json !== undefined) {
+    opts.body = JSON.stringify(json);
+    opts.headers['Content-Type'] = 'application/json';
+  } else if (body !== undefined) {
+    opts.body = body;
+  }
+  const res = await fetch(`${base()}${path}`, opts);
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const data = await res.json();
+      if (data?.message) message = data.message;
+    } catch {
+      // Not JSON; keep the status text.
+    }
+    throw new Error(message);
+  }
+  const text = await res.text();
+  if (raw) return text;
+  return text ? JSON.parse(text) : null;
 }
 
-export function setEspHost(host) {
-  return setGatewayHost(host);
-}
+const q = (params) => new URLSearchParams(params).toString();
 
-export function getDaemonHost() {
-  return getGatewayHost();
-}
+// ── Search / stream resolution (browser -> resolver) ──────────────────────
 
-export function setDaemonHost(host) {
-  return setGatewayHost(host);
-}
-
-export function getGatewayBaseUrl() {
-  return `http://${getGatewayHost()}`;
-}
-
-export function getEspBaseUrl() {
-  return getGatewayBaseUrl();
-}
-
-export function getDaemonBaseUrl() {
-  return getGatewayBaseUrl();
-}
-
-export function getDaemonWsUrl() {
-  return `ws://${getGatewayHost()}/api/ws`;
-}
-
-async function fetchJson(url, opts) {
-  const res = await fetch(url, opts);
+export async function searchYouTube(query) {
+  if (!query || !query.trim()) return [];
+  const res = await fetch(`${STREAM_API_BASE}/search?q=${encodeURIComponent(query.trim())}`);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
 
-// ── Search / stream resolution (one-shot, browser -> resolver directly) ────
-
-export async function searchYouTube(query) {
-  if (!query || !query.trim()) return [];
-  return fetchJson(`${STREAM_API_BASE}/search?q=${encodeURIComponent(query.trim())}`);
-}
-
 export async function resolveStreamUrl(videoId) {
-  const data = await fetchJson(`${STREAM_API_BASE}/videos/${encodeURIComponent(videoId)}`);
-  const formats = data.adaptiveFormats || [];
-
-  const opusFormat = formats.find((f) => f.type && f.type.includes('opus'));
-  if (opusFormat && opusFormat.url) return opusFormat.url;
-
-  const webmFormat = formats.find((f) => f.type && f.type.includes('audio/webm'));
-  if (webmFormat && webmFormat.url) return webmFormat.url;
-
-  const audioFormat = formats.find((f) => f.type && f.type.startsWith('audio/'));
-  if (audioFormat && audioFormat.url) return audioFormat.url;
-
-  if (formats.length > 0 && formats[0].url) return formats[0].url;
-
-  throw new Error('No playable audio stream found for video');
+  const res = await fetch(`${STREAM_API_BASE}/videos/${encodeURIComponent(videoId)}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const formats = (await res.json()).adaptiveFormats || [];
+  const pick =
+    formats.find((f) => f.type?.includes('opus')) ||
+    formats.find((f) => f.type?.includes('audio/webm')) ||
+    formats.find((f) => f.type?.startsWith('audio/')) ||
+    formats[0];
+  if (!pick?.url) throw new Error('No playable audio stream found for this video');
+  return pick.url;
 }
 
-// ── SD library (one-shot, browser -> ESP directly) ──────────────────────────
+// ── Music ──────────────────────────────────────────────────────────────────
 
-export async function getMusicLibrary(filter = '') {
-  const query = filter ? `?q=${encodeURIComponent(filter)}` : '';
-  return fetchJson(`${getEspBaseUrl()}/api/music/library${query}`);
-}
+export const getLibrary = (filter = '') =>
+  request(`/api/music/library${filter ? `?${q({ q: filter })}` : ''}`);
+export const scanLibrary = () => request('/api/music/library/scan', { method: 'POST' });
+export const deleteFromLibrary = (id) => request(`/api/music/library?${q({ id })}`, { method: 'DELETE' });
+export const playLocal = (idOrPath) => request('/api/music/play_local', { method: 'POST', json: { id: idOrPath } });
 
-export async function scanMusicLibrary() {
-  return fetchJson(`${getEspBaseUrl()}/api/music/library/scan`, { method: 'POST' });
-}
-
-export async function deleteFromLibrary(id) {
-  return fetchJson(`${getEspBaseUrl()}/api/music/library?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-export async function playLocalOnEsp(idOrPath) {
-  return fetchJson(`${getEspBaseUrl()}/api/music/play_local`, {
+export const playStream = (track, streamUrl) =>
+  request('/api/music/play', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: idOrPath }),
-  });
-}
-
-export async function playStreamOnEsp(track, streamUrl) {
-  return fetchJson(`${getEspBaseUrl()}/api/music/play`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    json: {
       stream_url: streamUrl,
-      id: track.id || track.videoId || '',
+      id: track.id || '',
       title: track.title || 'Unknown Title',
-      artist: track.artist || track.author || 'Unknown Artist',
-      duration: track.duration || track.lengthSeconds || 0,
-    }),
+      artist: track.artist || 'Unknown Artist',
+      duration: track.duration || 0,
+    },
   });
-}
 
-// ── Alert chime (one-shot, browser -> ESP directly) ─────────────────────────
-//
-// Deviation from brief: the daemon's WAL wire protocol (StarProtocol.h /
-// WalTypes.h) has no field or command id for triggering the chime - on the
-// ESP side AlertPlayer is invoked straight from its own local HTTP handler,
-// not through SysDb. Routing it through the daemon's WS channel would either
-// require an ESP firmware change (out of scope: only web-app + daemon are
-// in play here) or silently be a no-op. Kept as a direct one-shot REST call,
-// same as the SD library operations above.
+// ── Audio ──────────────────────────────────────────────────────────────────
 
-export async function playAlertSound() {
-  return fetchJson(`${getEspBaseUrl()}/api/audio/alert`, { method: 'POST' });
-}
+export const playChime = () => request('/api/audio/alert', { method: 'POST' });
 
-// ── Daemon read-only snapshot (rarely needed; WS pushes this on connect) ────
+// ── Alarms ─────────────────────────────────────────────────────────────────
 
-export async function getDaemonStatus() {
-  return fetchJson(`${getDaemonBaseUrl()}/api/status`);
+export const getAlarms = () => request('/api/alarms');
+export const saveAlarm = (alarm) => request('/api/alarms', { method: 'POST', json: alarm });
+export const deleteAlarm = (id) => request(`/api/alarms?${q({ id })}`, { method: 'DELETE' });
+export const stopAlarm = () => request('/api/alarms/stop', { method: 'POST' });
+
+// ── Assistant ──────────────────────────────────────────────────────────────
+
+export const getAssistantConfig = () => request('/api/config/gemini');
+export const saveAssistantConfig = (config) => request('/api/config/gemini', { method: 'POST', json: config });
+
+export const MEMORY_FILE = '/sdcard/gemini_memory.txt';
+export const NOTES_DIR = '/sdcard/notes';
+export const ALARM_TONES_DIR = '/sdcard/alarms';
+
+// ── Files ──────────────────────────────────────────────────────────────────
+
+export const listFiles = (path) => request(`/api/files?${q({ path })}`);
+export const readTextFile = (path) => request(`/api/files/download?${q({ path })}`, { raw: true });
+export const writeTextFile = (path, text) =>
+  request(`/api/files/upload?${q({ path })}`, { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } });
+export const deleteFile = (path) => request(`/api/files?${q({ path })}`, { method: 'DELETE' });
+
+// ── System ─────────────────────────────────────────────────────────────────
+
+export const getMetrics = () => request('/api/system/metrics');
+export const getStorageInfo = () => request('/api/storage/info');
+export const getFirmwareStatus = () => request('/api/ota/status');
+export const getFrontendStatus = () => request('/api/ota/frontend');
+export const rollbackFrontend = () => request('/api/ota/frontend/rollback', { method: 'POST' });
+export const reboot = () => request('/api/system/reboot', { method: 'POST' });
+export const getLogs = (since = 0) => request(`/api/logs?${q({ since })}`);
+
+// Uploads a firmware image; XHR rather than fetch for upload progress.
+export function uploadFirmware(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${base()}/api/ota`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      let data = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // Keep null.
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data?.message || `${xhr.status} ${xhr.statusText}`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed (network error)'));
+    xhr.send(file);
+  });
 }

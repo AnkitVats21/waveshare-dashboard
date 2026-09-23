@@ -1,130 +1,146 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Sliders } from 'lucide-react';
-import Header from './components/Header';
-import PlayTab from './components/PlayTab';
-import DeviceTab from './components/DeviceTab';
-import NowPlayingDock from './components/NowPlayingDock';
-import DevLogs from './components/DevLogs';
-import { useStarSocket } from './hooks/useStarSocket';
-import { usePendingValue } from './hooks/usePendingValue';
-import { getEspHost, setEspHost, playStreamOnEsp } from './lib/api';
+import React, { useEffect, useState } from 'react';
+import clsx from 'clsx';
+import { Home as HomeIcon, Music2, Sparkles, AlarmClock, SlidersHorizontal, Cpu, Moon, Sun, Monitor } from 'lucide-react';
+import { useNexus } from './DeviceContext';
+import PlayerBar from './components/PlayerBar';
+import AlarmRinging from './components/AlarmRinging';
+import Home from './pages/Home';
+import Music from './pages/Music';
+import Assistant from './pages/Assistant';
+import Alarms from './pages/Alarms';
+import Device from './pages/Device';
+import System from './pages/System';
 
-const ledEqual = (a, b) =>
-  a.mode === b.mode && a.speed_ms === b.speed_ms &&
-  a.color.r === b.color.r && a.color.g === b.color.g && a.color.b === b.color.b;
+export const PAGES = [
+  { id: 'home', label: 'Home', icon: HomeIcon, component: Home },
+  { id: 'music', label: 'Music', icon: Music2, component: Music },
+  { id: 'assistant', label: 'Assistant', icon: Sparkles, component: Assistant },
+  { id: 'alarms', label: 'Alarms', icon: AlarmClock, component: Alarms },
+  { id: 'device', label: 'Device', icon: SlidersHorizontal, component: Device },
+  { id: 'system', label: 'System', icon: Cpu, component: System },
+];
 
-// Optimistic track shown the instant a user hits "Play", before the daemon's
-// next snapshot confirms it (which can take a few seconds - stream
-// resolution + device round trip). Cleared once the snapshot's track id
-// matches, or after a grace period.
-const TRACK_OPTIMISM_MS = 5000;
+const pageFromHash = () => {
+  const id = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+  return PAGES.some((p) => p.id === id) ? id : 'home';
+};
+
+export const navigate = (id) => {
+  window.location.hash = `/${id}`;
+};
+
+const THEMES = ['system', 'dark', 'light'];
+const THEME_ICONS = { system: Monitor, dark: Moon, light: Sun };
+
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('nexus_theme') || 'system';
+    } catch {
+      return 'system';
+    }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('nexus_theme', theme);
+    } catch {
+      // Not persisted.
+    }
+  }, [theme]);
+  const cycle = () => setTheme((t) => THEMES[(THEMES.indexOf(t) + 1) % THEMES.length]);
+  return [theme, cycle];
+}
+
+function ConnectionBadge() {
+  const { online, host } = useNexus();
+  return (
+    <div className={clsx('conn', online ? 'conn-on' : 'conn-off')} title={online ? `Connected to ${host}` : `Can't reach ${host}`}>
+      <span className="conn-dot" />
+      <span className="conn-text">{online ? 'Online' : 'Offline'}</span>
+    </div>
+  );
+}
 
 export default function App() {
-  const [espHost, setHostState] = useState(getEspHost());
-  const [activeTab, setActiveTab] = useState('play');
-  const [devMode, setDevMode] = useState(false);
-  const [libraryCount, setLibraryCount] = useState(0);
-  const [optimisticTrack, setOptimisticTrack] = useState(null);
-
-  const { snapshot, online, send } = useStarSocket();
+  const [page, setPage] = useState(pageFromHash);
+  const [theme, cycleTheme] = useTheme();
+  const { snapshot } = useNexus();
 
   useEffect(() => {
-    if (!optimisticTrack) return;
-    if (snapshot.music.current_track?.id === optimisticTrack.id) {
-      setOptimisticTrack(null);
-      return;
-    }
-    const t = setTimeout(() => setOptimisticTrack(null), TRACK_OPTIMISM_MS);
-    return () => clearTimeout(t);
-  }, [optimisticTrack, snapshot.music.current_track?.id]);
-
-  const handleHostChange = (newHost) => setHostState(setEspHost(newHost));
-
-  const volume = usePendingValue(snapshot.state.speaker_volume, (v) => send('volume', { value: v }));
-  const micGain = usePendingValue(snapshot.state.mic_gain_db, (v) => send('mic_gain', { value: v }));
-  const micMuted = usePendingValue(!snapshot.state.mic_enabled, (v) => send('mic_mute', { value: v }));
-  const repeat = usePendingValue(snapshot.music.repeat_mode, (v) => send('action', { action: 'repeat', value: v }));
-  const autoplay = usePendingValue(snapshot.music.autoplay, (v) => send('action', { action: 'autoplay', value: v }));
-  const caching = usePendingValue(snapshot.music.caching, (v) => send('action', { action: 'caching', value: v }));
-  const led = usePendingValue(snapshot.led, (v) => send('led', {
-    mode: ['off', 'solid', 'blink', 'breath', 'rainbow'][v.mode] || 'off',
-    color: v.color,
-    speed_ms: v.speed_ms,
-  }), ledEqual);
-
-  const handlePlay = useCallback(async (track, streamUrl) => {
-    setOptimisticTrack(track);
-    try {
-      await playStreamOnEsp(track, streamUrl);
-    } catch (err) {
-      console.warn('Direct stream playback API failed, falling back to WS action:', err);
-      send('action', { action: 'play', data: track.id || track.title });
-    }
-  }, [send]);
-
-  const handlePlayLocal = useCallback((track) => {
-    setOptimisticTrack({ id: track.id, title: track.title, artist: track.artist, duration: track.durationSeconds });
+    const onHash = () => setPage(pageFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const displayMusic = {
-    ...snapshot.music,
-    current_track: optimisticTrack || snapshot.music.current_track,
-  };
+  useEffect(() => {
+    document.querySelector('.main')?.scrollTo?.(0, 0);
+  }, [page]);
+
+  const Current = PAGES.find((p) => p.id === page).component;
+  const ThemeIcon = THEME_ICONS[theme];
 
   return (
-    <div className="app-shell">
-      <Header
-        espHost={espHost}
-        onHostChange={handleHostChange}
-        online={online}
-        deviceConnected={snapshot.connected}
-        devMode={devMode}
-        onToggleDevMode={() => setDevMode((v) => !v)}
-      />
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">N</div>
+          <div className="brand-text">
+            <span className="brand-name">Nexus</span>
+            <span className="brand-sub">ESP32-S3 speaker</span>
+          </div>
+        </div>
+        <nav className="nav">
+          {PAGES.map((p) => (
+            <a key={p.id} href={`#/${p.id}`} className={clsx('nav-item', page === p.id && 'is-active')}>
+              <p.icon size={18} />
+              <span>{p.label}</span>
+              {p.id === 'music' && snapshot.music.queue_length > 0 && (
+                <span className="nav-count">{snapshot.music.queue_length}</span>
+              )}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <ConnectionBadge />
+          <button className="icon-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}>
+            <ThemeIcon size={17} />
+          </button>
+        </div>
+      </aside>
 
-      <main className="app-main">
-        {!devMode && (
-          <nav className="tab-bar">
-            <button className={activeTab === 'play' ? 'active' : ''} onClick={() => setActiveTab('play')}>
-              <Play size={15} /> Play
-            </button>
-            <button className={activeTab === 'device' ? 'active' : ''} onClick={() => setActiveTab('device')}>
-              <Sliders size={15} /> Device
-            </button>
-          </nav>
-        )}
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark">N</div>
+          <span className="brand-name">Nexus</span>
+        </div>
+        <div className="topbar-right">
+          <ConnectionBadge />
+          <button className="icon-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}>
+            <ThemeIcon size={17} />
+          </button>
+        </div>
+      </header>
 
-        {devMode ? (
-          <DevLogs snapshot={snapshot} />
-        ) : activeTab === 'play' ? (
-          <PlayTab
-            onPlay={handlePlay}
-            onPlayLocal={handlePlayLocal}
-            disabled={!online}
-            libraryCount={libraryCount}
-            onLibraryCount={setLibraryCount}
-          />
-        ) : (
-          <DeviceTab
-            online={online}
-            send={send}
-            volume={volume}
-            micGain={micGain}
-            micMuted={micMuted}
-            led={led}
-          />
-        )}
+      <main className="main">
+        <div className="page">
+          {snapshot.alarm.ringing && <AlarmRinging />}
+          <Current />
+        </div>
       </main>
 
-      <NowPlayingDock
-        music={displayMusic}
-        online={online}
-        send={send}
-        volume={volume}
-        repeat={repeat}
-        autoplay={autoplay}
-        caching={caching}
-      />
+      <PlayerBar />
+
+      <nav className="tabbar">
+        {PAGES.map((p) => (
+          <a key={p.id} href={`#/${p.id}`} className={clsx('tab', page === p.id && 'is-active')}>
+            <p.icon size={20} />
+            <span>{p.label}</span>
+          </a>
+        ))}
+      </nav>
     </div>
   );
 }
