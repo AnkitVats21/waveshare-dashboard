@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import clsx from 'clsx';
-import { Volume2, Mic, Lightbulb, Bell } from 'lucide-react';
-import { Button, Card, PageHeader, Switch } from '../components/ui';
+import { Volume2, Mic, Lightbulb } from 'lucide-react';
+import { Card, PageHeader, Switch } from '../components/ui';
 import CommitSlider from '../components/CommitSlider';
-import { useToast } from '../components/Toast';
 import { useNexus, LED_MODES } from '../DeviceContext';
-import { playChime } from '../lib/api';
+import AlertSounds from '../components/AlertSounds';
 
 const PRESETS = ['#ffffff', '#ffb45c', '#ff5c5c', '#ff5cc8', '#8b7bff', '#5c9dff', '#3ee0c8', '#6ae36a'];
 const MODE_LABELS = { off: 'Off', solid: 'Solid', blink: 'Blink', breath: 'Breathe', rainbow: 'Rainbow' };
@@ -31,9 +30,7 @@ function SliderRow({ label, value, unit, ...props }) {
 
 export default function Device() {
   const { online, controls } = useNexus();
-  const toast = useToast();
   const { volume, micGain, micMuted, led } = controls;
-  const [chiming, setChiming] = useState(false);
   const disabled = !online;
   const mode = LED_MODES[led.value.mode] || 'off';
   const colorHex = rgbToHex(led.value.color);
@@ -42,20 +39,9 @@ export default function Device() {
   const setColor = (hex) =>
     led.commit({ ...led.value, color: hexToRgb(hex), mode: mode === 'off' ? LED_MODES.indexOf('solid') : led.value.mode });
 
-  const chime = async () => {
-    setChiming(true);
-    try {
-      await playChime();
-    } catch (err) {
-      toast(`Chime failed: ${err.message}`, 'error');
-    } finally {
-      setChiming(false);
-    }
-  };
-
   return (
     <>
-      <PageHeader title="Device" subtitle="Speaker, microphone and light." />
+      <PageHeader title="Device" subtitle="Speaker, microphone, light and sounds." />
       <div className={clsx('device-grid', disabled && 'is-offline')}>
         <Card title="Speaker" icon={Volume2}>
           <SliderRow label="Volume" value={volume.value} unit="%" min={0} max={100} disabled={disabled} onCommit={volume.commit} />
@@ -63,14 +49,6 @@ export default function Device() {
             {[10, 30, 50, 70, 100].map((v) => (
               <button key={v} className={clsx('chip', volume.value === v && 'is-active')} disabled={disabled} onClick={() => volume.commit(v)}>{v}%</button>
             ))}
-          </div>
-          <div className="divider" />
-          <div className="inline-row">
-            <div>
-              <div>Test sound</div>
-              <div className="muted small">Plays the wake chime.</div>
-            </div>
-            <Button icon={Bell} busy={chiming} disabled={disabled} onClick={chime}>Play chime</Button>
           </div>
         </Card>
 
@@ -139,6 +117,8 @@ export default function Device() {
             </div>
           </div>
         </Card>
+
+        <AlertSounds disabled={disabled} />
       </div>
     </>
   );

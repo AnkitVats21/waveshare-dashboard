@@ -125,7 +125,19 @@ export const playStream = (track, streamUrl) =>
 
 // ── Audio ──────────────────────────────────────────────────────────────────
 
-export const playChime = () => request('/api/audio/alert', { method: 'POST' });
+
+// Alert chimes: settings live in system.ndb on the device. Each POST returns
+// { alert } with the alert's new state.
+export const getAlerts = () => request('/api/alerts');
+export const updateAlert = (name, changes) => request(`/api/alerts/${name}`, { method: 'POST', json: changes });
+export const previewAlert = (name) => request(`/api/alerts/${name}/play`, { method: 'POST' });
+export const resetAlert = (name) => request(`/api/alerts/${name}/reset`, { method: 'POST' });
+export const uploadAlert = (name, file) =>
+  request(`/api/alerts/${name}/upload?${q({ file: file.name })}`, {
+    method: 'POST',
+    body: file,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
 
 // ── Alarms ─────────────────────────────────────────────────────────────────
 
