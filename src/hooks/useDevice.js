@@ -26,7 +26,7 @@ export const EMPTY_SNAPSHOT = {
     queue_length: 0,
   },
   assistant: { state: 'idle', connection: 'disconnected' },
-  alarm: { ringing: false, id: 0 },
+  alarm: { ringing: false, id: 0, state: 'idle' },
 };
 
 // Single WebSocket to the device control channel (/api/ws).

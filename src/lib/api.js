@@ -141,10 +141,28 @@ export const uploadAlert = (name, file) =>
 
 // ── Alarms ─────────────────────────────────────────────────────────────────
 
+// Alarms and timers (kind "timer") share /api/alarms. POST without an id
+// creates; with one it updates only the fields sent. Each returns the saved row.
 export const getAlarms = () => request('/api/alarms');
 export const saveAlarm = (alarm) => request('/api/alarms', { method: 'POST', json: alarm });
 export const deleteAlarm = (id) => request(`/api/alarms?${q({ id })}`, { method: 'DELETE' });
+export const getAlarmStatus = () => request('/api/alarms/status');
 export const stopAlarm = () => request('/api/alarms/stop', { method: 'POST' });
+export const snoozeAlarm = () => request('/api/alarms/snooze', { method: 'POST' });
+// Rings now for up to limitS seconds; tone is a library song id, '' = built-in.
+export const testRing = (tone, limitS = 20) =>
+  request('/api/alarms/ring', { method: 'POST', json: { tone, ring_limit_s: limitS } });
+
+export const getReminders = () => request('/api/reminders');
+export const saveReminder = (reminder) => request('/api/reminders', { method: 'POST', json: reminder });
+export const deleteReminder = (id) => request(`/api/reminders?${q({ id })}`, { method: 'DELETE' });
+export const ackReminder = (id) => request(`/api/reminders/ack?${q({ id })}`, { method: 'POST' });
+
+// Device clock: {epoch, local, timezone, valid, source, last_ntp_sync?, ntp}.
+export const getTime = () => request('/api/time');
+export const setTime = (epoch, timezone) =>
+  request('/api/time', { method: 'POST', json: timezone ? { epoch, timezone } : { epoch } });
+export const syncTime = () => request('/api/time/sync', { method: 'POST' });
 
 // ── Assistant ──────────────────────────────────────────────────────────────
 

@@ -126,7 +126,7 @@ export default function App() {
 
       <main className="main">
         <div className="page">
-          {snapshot.alarm.ringing && <AlarmRinging />}
+          {(snapshot.alarm.ringing || snapshot.alarm.state === 'snoozed') && <AlarmRinging alarm={snapshot.alarm} />}
           <Current />
         </div>
       </main>
