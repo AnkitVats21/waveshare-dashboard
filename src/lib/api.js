@@ -171,7 +171,6 @@ export const saveAssistantConfig = (config) => request('/api/config/gemini', { m
 
 export const MEMORY_FILE = '/sdcard/gemini_memory.txt';
 export const NOTES_DIR = '/sdcard/notes';
-export const ALARM_TONES_DIR = '/sdcard/alarms';
 
 // ── Files ──────────────────────────────────────────────────────────────────
 

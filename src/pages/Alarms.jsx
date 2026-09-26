@@ -1,156 +1,79 @@
 import React, { useEffect, useState } from 'react';
-import clsx from 'clsx';
-import { AlarmClock, Plus, Trash2, Info, Pencil, Check, X } from 'lucide-react';
-import { Banner, Button, Card, Empty, Field, IconButton, PageHeader, Switch } from '../components/ui';
-import { useToast } from '../components/Toast';
-import { ALARM_TONES_DIR, deleteAlarm, getAlarms, listFiles, saveAlarm } from '../lib/api';
-import { formatIn, minutesUntil, pad2 } from '../lib/format';
+import { AlarmClock, StickyNote, Timer } from 'lucide-react';
+import { PageHeader, Segmented } from '../components/ui';
+import { useNexus } from '../DeviceContext';
+import { usePoll } from '../hooks/usePoll';
+import { useDeviceClock } from '../hooks/useDeviceClock';
+import { getAlarms, getReminders } from '../lib/api';
+import AlarmsView from './alarms/AlarmsView';
+import TimersView from './alarms/TimersView';
+import RemindersView from './alarms/RemindersView';
+import ClockCard from './alarms/ClockCard';
 
-const toneName = (path) => (path || '').split('/').pop().replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
-const toTimeValue = (a) => `${pad2(a.hour)}:${pad2(a.minute)}`;
-const parseTime = (v) => {
-  const [h, m] = v.split(':').map(Number);
-  return { hour: h, minute: m };
+const SUBS = ['alarms', 'timers', 'reminders'];
+
+const subFromHash = () => {
+  const sub = window.location.hash.replace(/^#\/?/, '').split('/')[1];
+  return SUBS.includes(sub) ? sub : 'alarms';
 };
 
-function ToneSelect({ tones, value, onChange }) {
-  const options = tones.includes(value) || !value ? tones : [value, ...tones];
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {options.length === 0 && <option value="">Default tone</option>}
-      {options.map((t) => <option key={t} value={t}>{toneName(t)}</option>)}
-    </select>
-  );
-}
-
-function AlarmRow({ alarm, tones, onSave, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [time, setTime] = useState(toTimeValue(alarm));
-  const [tone, setTone] = useState(alarm.tone_file);
-
-  useEffect(() => {
-    setTime(toTimeValue(alarm));
-    setTone(alarm.tone_file);
-  }, [alarm]);
-
-  const commit = async () => {
-    await onSave({ ...alarm, ...parseTime(time), tone_file: tone });
-    setEditing(false);
-  };
-
-  return (
-    <div className={clsx('alarm', !alarm.enabled && 'is-off')}>
-      {editing ? (
-        <div className="alarm-edit">
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
-          <ToneSelect tones={tones} value={tone} onChange={setTone} />
-          <IconButton icon={Check} label="Save" onClick={commit} />
-          <IconButton icon={X} label="Cancel" onClick={() => setEditing(false)} />
-        </div>
-      ) : (
-        <>
-          <div className="alarm-main">
-            <span className="alarm-time mono">{toTimeValue(alarm)}</span>
-            <span className="muted small">
-              {alarm.enabled ? formatIn(minutesUntil(alarm.hour, alarm.minute)) : 'Off'} · {toneName(alarm.tone_file) || 'default tone'}
-            </span>
-          </div>
-          <div className="alarm-actions">
-            <IconButton icon={Pencil} label="Edit" onClick={() => setEditing(true)} />
-            <IconButton icon={Trash2} label="Delete" danger onClick={() => onDelete(alarm)} />
-            <Switch checked={alarm.enabled} onChange={(on) => onSave({ ...alarm, enabled: on })} />
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function Alarms() {
-  const toast = useToast();
-  const [alarms, setAlarms] = useState(null);
-  const [tones, setTones] = useState([]);
-  const [time, setTime] = useState('07:00');
-  const [tone, setTone] = useState('');
-  const [adding, setAdding] = useState(false);
-
-  const load = async () => {
-    try {
-      const list = await getAlarms();
-      setAlarms([...(list || [])].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)));
-    } catch (err) {
-      toast(`Couldn't load alarms: ${err.message}`, 'error');
-      setAlarms([]);
-    }
-  };
+  const [sub, setSub] = useState(subFromHash);
+  const { snapshot } = useNexus();
+  const clock = useDeviceClock();
+  const alarms = usePoll(getAlarms, 15000);
+  const reminders = usePoll(getReminders, 15000);
+  const reloadAlarms = alarms.refresh;
+  const reloadReminders = reminders.refresh;
 
   useEffect(() => {
-    load();
-    listFiles(ALARM_TONES_DIR)
-      .then((d) => {
-        const wavs = (d?.entries || []).filter((e) => !e.is_dir && /\.wav$/i.test(e.name)).map((e) => `${ALARM_TONES_DIR}/${e.name}`);
-        setTones(wavs);
-        setTone((t) => t || wavs.find((w) => w.includes('soft_wake_up')) || wavs[0] || '');
-      })
-      .catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const onHash = () => setSub(subFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
-  const save = async (alarm) => {
-    try {
-      await saveAlarm(alarm);
-      await load();
-    } catch (err) {
-      toast(`Couldn't save the alarm: ${err.message}`, 'error');
-    }
+  // A ring changes the lists: one-time alarms switch off, timers go away,
+  // and reminders that come due are pending.
+  useEffect(() => {
+    reloadAlarms();
+    reloadReminders();
+  }, [snapshot.alarm.state, reloadAlarms, reloadReminders]);
+
+  // Reload shortly after a timer runs out, so it leaves the list.
+  const timers = (alarms.data || []).filter((a) => a.kind === 'timer');
+  const expired = timers.some((t) => t.at <= clock.now);
+  useEffect(() => {
+    if (!expired) return undefined;
+    const id = setTimeout(reloadAlarms, 1500);
+    return () => clearTimeout(id);
+  }, [expired, reloadAlarms]);
+
+  const change = (v) => {
+    window.history.replaceState(null, '', `#/alarms/${v}`);
+    setSub(v);
   };
 
-  const add = async (e) => {
-    e.preventDefault();
-    setAdding(true);
-    await save({ ...parseTime(time), tone_file: tone, enabled: true });
-    toast(`Alarm set for ${time}`);
-    setAdding(false);
-  };
-
-  const remove = async (alarm) => {
-    try {
-      await deleteAlarm(alarm.id);
-      await load();
-    } catch (err) {
-      toast(`Couldn't delete: ${err.message}`, 'error');
-    }
-  };
+  const pending = (reminders.data || []).filter((r) => r.pending).length;
+  const alarmList = alarms.loading && !alarms.data ? null : alarms.data || [];
+  const reminderList = reminders.loading && !reminders.data ? null : reminders.data || [];
 
   return (
     <>
-      <PageHeader title="Alarms" subtitle="Set wake-up alarms. You can also ask the assistant to set one." />
-      <Banner tone="info" icon={Info}>
-        Alarms are saved on the device, but ringing is switched off in the current firmware, so they won't sound yet.
-      </Banner>
-      <div className="alarms-grid">
-        <Card title="New alarm" icon={Plus}>
-          <form className="stack" onSubmit={add}>
-            <Field label="Time">
-              <input type="time" className="time-input" value={time} onChange={(e) => setTime(e.target.value)} required />
-            </Field>
-            <Field label="Tone">
-              <ToneSelect tones={tones} value={tone} onChange={setTone} />
-            </Field>
-            <Button type="submit" variant="primary" icon={Plus} busy={adding}>Add alarm</Button>
-          </form>
-        </Card>
-        <Card title="Your alarms" icon={AlarmClock} padded={false}>
-          {alarms === null ? (
-            <div className="loading" />
-          ) : alarms.length === 0 ? (
-            <Empty icon={AlarmClock} title="No alarms">Add one here or say "set an alarm for 7 AM".</Empty>
-          ) : (
-            <div className="rows">
-              {alarms.map((a) => <AlarmRow key={a.id} alarm={a} tones={tones} onSave={save} onDelete={remove} />)}
-            </div>
-          )}
-        </Card>
-      </div>
+      <PageHeader title="Alarms" subtitle="Alarms, timers and reminders. You can also ask the assistant.">
+        <Segmented
+          value={sub}
+          onChange={change}
+          options={[
+            { value: 'alarms', label: 'Alarms', icon: AlarmClock },
+            { value: 'timers', label: 'Timers', icon: Timer, badge: timers.length || null },
+            { value: 'reminders', label: 'Reminders', icon: StickyNote, badge: pending || null },
+          ]}
+        />
+      </PageHeader>
+      <ClockCard clock={clock} />
+      {sub === 'alarms' && <AlarmsView alarms={alarmList} now={clock.now} reload={reloadAlarms} />}
+      {sub === 'timers' && <TimersView alarms={alarmList} now={clock.now} reload={reloadAlarms} />}
+      {sub === 'reminders' && <RemindersView reminders={reminderList} now={clock.now} reload={reloadReminders} />}
     </>
   );
 }

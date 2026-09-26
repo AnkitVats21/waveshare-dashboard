@@ -506,9 +506,29 @@ textarea { resize: vertical; line-height: 1.5; }
 .alarm.is-off .alarm-time { color: var(--text-3); }
 .alarm-actions { display: flex; align-items: center; gap: 4px; }
 .alarm-actions .switch { margin-left: 8px; }
-.alarm-edit { flex: 1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.alarm-edit input { width: 130px; font-family: var(--mono); }
-.alarm-edit select { flex: 1; min-width: 150px; }
+.alarm.is-selected { background: var(--accent-soft); }
+.reminder-text { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.day-picker { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.day {
+  height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-2); font-size: 12.5px; font-weight: 600;
+}
+.day:hover { border-color: var(--text-3); color: var(--text); }
+.day.is-active { background: var(--accent); border-color: transparent; color: var(--accent-text); }
+.inline-field { display: flex; gap: 6px; align-items: center; }
+.inline-field select { flex: 1; min-width: 0; }
+.two-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.form-actions { display: flex; gap: 8px; }
+.form-actions .btn-primary { flex: 1; }
+.banner-actions { display: flex; gap: 8px; margin: -4px 0; }
+.clock-card { padding: 10px 12px 10px 16px; }
+.clock-card .banner { margin: 10px 0 2px; }
+.clock-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.clock-time { font-size: 18px; font-weight: 600; }
+.clock-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clock-settings { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 12px 0 4px; }
+.clock-settings .field { flex: 1; min-width: 220px; }
+.next-extra { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
 
 .device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .device-grid.is-offline { opacity: 0.6; }
