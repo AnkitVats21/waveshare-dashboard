@@ -17,7 +17,7 @@ const TRACK_OPTIMISM_MS = 8000;
 
 export function DeviceProvider({ children }) {
   const [host, setHostState] = useState(getHost());
-  const { snapshot, online, send } = useDevice(host);
+  const { snapshot, online, send, transcript } = useDevice(host);
   const [optimisticTrack, setOptimisticTrack] = useState(null);
 
   const setHost = useCallback((h) => setHostState(persistHost(h)), []);
@@ -67,6 +67,7 @@ export function DeviceProvider({ children }) {
     setHost,
     online,
     snapshot,
+    transcript,
     send,
     act,
     playTrack,
@@ -74,7 +75,7 @@ export function DeviceProvider({ children }) {
     setOptimisticTrack,
     currentTrack: optimisticTrack || snapshot.music.current_track,
     controls: { volume, micGain, micMuted, repeat, autoplay, caching, led },
-  }), [host, setHost, online, snapshot, send, act, playTrack, queueTrack, optimisticTrack,
+  }), [host, setHost, online, snapshot, transcript, send, act, playTrack, queueTrack, optimisticTrack,
     volume, micGain, micMuted, repeat, autoplay, caching, led]);
 
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;

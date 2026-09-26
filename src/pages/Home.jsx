@@ -125,7 +125,7 @@ function AssistantStatus() {
   const st = ASSISTANT_STATES[snapshot.assistant.state] || ASSISTANT_STATES.idle;
   const active = snapshot.assistant.state !== 'idle';
   return (
-    <Card title="Assistant" icon={Sparkles} action={<a className="link" href="#/assistant">Settings <ChevronRight size={14} /></a>}>
+    <Card title="Assistant" icon={Sparkles} action={<a className="link" href="#/assistant">Open <ChevronRight size={14} /></a>}>
       <div className="assistant-status">
         <div className={clsx('orb', active && `orb-${snapshot.assistant.state}`)} />
         <div>

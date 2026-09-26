@@ -490,6 +490,28 @@ textarea { resize: vertical; line-height: 1.5; }
 
 .assistant-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .note .row { cursor: default; }
+
+/* Conversation: start/end and the live transcript */
+.conversation-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.transcript {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: min(60vh, 560px); overflow-y: auto;
+  padding: 12px; margin: 0 -4px; border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.transcript-time { align-self: center; padding: 6px 0 2px; }
+.bubble {
+  max-width: min(78%, 560px); padding: 8px 12px; border-radius: 14px;
+  line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+}
+.bubble-user { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 4px; }
+.bubble-model { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.bubble.is-live::after { content: '▍'; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+.settings-group { display: flex; flex-direction: column; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.settings-group-title { font-weight: 600; color: var(--text-2); }
+.narrow-input { max-width: 120px; }
+@media (max-width: 640px) {
+  .bubble { max-width: 88%; }
+}
 .note-title { cursor: pointer; }
 .note .chevron svg { transition: transform 0.15s; }
 .note.is-open .chevron svg { transform: rotate(180deg); }

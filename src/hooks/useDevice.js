@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { wsUrl } from '../lib/api';
 
 const RECONNECT_MS = 3000;
+const TRANSCRIPT_KEEP = 100;   // entries kept in the browser; the device keeps 32
 
 export const EMPTY_SNAPSHOT = {
   connected: false,
@@ -34,10 +35,16 @@ export const EMPTY_SNAPSHOT = {
 // The device pushes a full state snapshot on connect, after every change and
 // every ~2 s. `send(cmd, payload)` sends {"cmd": cmd, ...payload}. The device
 // accepts one client at a time; a newer connection takes over.
+//
+// The transcript is subscribed on connect: the device sends every entry it
+// has, then {"type":"transcript","entries"} with the entries that changed.
+// `transcript` is [{id, role: 'user'|'model', t_ms, done, text}], oldest first.
 export function useDevice(host) {
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [online, setOnline] = useState(false);
+  const [transcript, setTranscript] = useState([]);
   const wsRef = useRef(null);
+  const entriesRef = useRef(new Map());
 
   useEffect(() => {
     let destroyed = false;
@@ -47,11 +54,28 @@ export function useDevice(host) {
       if (destroyed) return;
       const ws = new WebSocket(wsUrl());
       wsRef.current = ws;
-      ws.onopen = () => !destroyed && setOnline(true);
+      ws.onopen = () => {
+        if (destroyed) return;
+        setOnline(true);
+        // The device resends everything it has, and its ids restart after a
+        // reboot, so start from empty.
+        entriesRef.current = new Map();
+        setTranscript([]);
+        ws.send(JSON.stringify({ cmd: 'subscribe', transcript: true }));
+      };
       ws.onmessage = (evt) => {
         if (destroyed) return;
         try {
           const data = JSON.parse(evt.data);
+          if (data.type === 'transcript') {
+            const map = entriesRef.current;
+            for (const e of data.entries || []) map.set(e.id, e);
+            const all = [...map.values()].sort((a, b) => a.id - b.id);
+            const kept = all.slice(-TRANSCRIPT_KEEP);
+            if (kept.length < all.length) entriesRef.current = new Map(kept.map((e) => [e.id, e]));
+            setTranscript(kept);
+            return;
+          }
           // Merge over the defaults so older firmware (no queue/assistant) still renders.
           setSnapshot({
             ...EMPTY_SNAPSHOT,
@@ -86,5 +110,5 @@ export function useDevice(host) {
     return true;
   }, []);
 
-  return { snapshot, online, send };
+  return { snapshot, online, send, transcript };
 }

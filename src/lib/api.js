@@ -168,6 +168,10 @@ export const syncTime = () => request('/api/time/sync', { method: 'POST' });
 
 export const getAssistantConfig = () => request('/api/config/gemini');
 export const saveAssistantConfig = (config) => request('/api/config/gemini', { method: 'POST', json: config });
+// Start: a conversation as if the wake word was heard, with the longer
+// silence timeout (manual_silence_s). Stop: ends it in any state.
+export const startConversation = () => request('/api/assistant/start', { method: 'POST' });
+export const stopConversation = () => request('/api/assistant/stop', { method: 'POST' });
 
 export const MEMORY_FILE = '/sdcard/gemini_memory.txt';
 export const NOTES_DIR = '/sdcard/notes';

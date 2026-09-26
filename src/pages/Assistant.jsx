@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { Sparkles, Brain, StickyNote, KeyRound, AlertTriangle, Save, Trash2, ChevronDown, FileText, Info } from 'lucide-react';
-import { Banner, Button, Card, Empty, Field, IconButton, PageHeader, Pill } from '../components/ui';
+import { Sparkles, Brain, StickyNote, KeyRound, AlertTriangle, Save, Trash2, ChevronDown, FileText, Info, MessagesSquare, Settings2 } from 'lucide-react';
+import { Banner, Button, Card, Empty, Field, IconButton, PageHeader, Pill, Segmented, Switch } from '../components/ui';
+import Conversation from './assistant/Conversation';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { ASSISTANT_STATES } from './Home';
@@ -23,35 +24,63 @@ const VOICES = [
 const MEMORY_LIMIT = 16384;
 const stripModelPrefix = (m) => (m || '').replace(/^models\//, '');
 
-function Settings() {
-  const toast = useToast();
-  const [config, setConfig] = useState(null);
-  const [form, setForm] = useState({ voice: '', model: '', system_prompt: '' });
-  const [newKey, setNewKey] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState(null);
+const SILENCE_MIN = 3;
+const SILENCE_MAX = 60;
 
+const formFrom = (cfg) => ({
+  voice: cfg.voice || '',
+  model: stripModelPrefix(cfg.model),
+  system_prompt: cfg.system_prompt || '',
+  transcripts: cfg.transcripts ?? true,
+  transcript_log: cfg.transcript_log ?? true,
+  manual_silence_s: cfg.manual_silence_s ?? 10,
+});
+
+// The Gemini config, loaded once for both tabs.
+function useAssistantConfig() {
+  const [config, setConfig] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const load = async () => {
     try {
-      const cfg = await getAssistantConfig();
-      setConfig(cfg);
-      setForm({ voice: cfg.voice || '', model: stripModelPrefix(cfg.model), system_prompt: cfg.system_prompt || '' });
+      setConfig(await getAssistantConfig());
       setLoadError(null);
     } catch (err) {
       setLoadError(err.message);
     }
   };
   useEffect(() => { load(); }, []);
+  return { config, loadError, load };
+}
+
+function Settings({ config, loadError, load }) {
+  const toast = useToast();
+  const [form, setForm] = useState(() => formFrom(config || {}));
+  const [newKey, setNewKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (config) setForm(formFrom(config)); }, [config]);
 
   const defaults = config?.defaults || {};
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setValue = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
     setSaving(true);
     try {
       // Keep any other fields already in the file; drop the read-only extras.
       const { api_key_set, defaults: _d, config_error, ...rest } = config?.config_error ? {} : config || {};
-      const body = { ...rest, voice: form.voice, model: form.model.trim(), system_prompt: form.system_prompt };
+      const silence = Math.round(Number(form.manual_silence_s));
+      if (!(silence >= SILENCE_MIN && silence <= SILENCE_MAX)) {
+        throw new Error(`The silence timeout must be ${SILENCE_MIN}-${SILENCE_MAX} s`);
+      }
+      const body = {
+        ...rest,
+        voice: form.voice,
+        model: form.model.trim(),
+        system_prompt: form.system_prompt,
+        transcripts: form.transcripts,
+        transcript_log: form.transcript_log,
+        manual_silence_s: silence,
+      };
       for (const k of ['voice', 'model', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
       await saveAssistantConfig(body);
@@ -106,6 +135,26 @@ function Settings() {
           placeholder="You are Nexus, a friendly speaker assistant. Keep answers short. Reply in Hindi when I speak Hindi."
         />
       </Field>
+      <div className="settings-group">
+        <div className="settings-group-title small">Conversations</div>
+        <Switch checked={form.transcripts} onChange={setValue('transcripts')} label="Transcripts: show what's said on the Conversation tab" />
+        <Switch
+          checked={form.transcripts && form.transcript_log}
+          disabled={!form.transcripts}
+          onChange={setValue('transcript_log')}
+          label="Also print each turn to the device log"
+        />
+        <Field label="Silence timeout (s)" hint={`For conversations started from this dashboard: how long it waits for you to speak before ending. The wake word always uses 3 s. ${SILENCE_MIN}-${SILENCE_MAX} s.`}>
+          <input
+            type="number"
+            min={SILENCE_MIN}
+            max={SILENCE_MAX}
+            value={form.manual_silence_s}
+            onChange={set('manual_silence_s')}
+            className="narrow-input"
+          />
+        </Field>
+      </div>
       <Field label="Gemini API key" hint={config.api_key_set ? 'A key is saved on the SD card. It is never shown; type a new one to replace it.' : 'No key on the SD card; the key built into the firmware is used.'}>
         <div className="input-icon">
           <KeyRound size={16} />
@@ -259,21 +308,53 @@ function Notes() {
   );
 }
 
+const SUBS = ['conversation', 'settings'];
+
+const subFromHash = () => {
+  const sub = window.location.hash.replace(/^#\/?/, '').split('/')[1];
+  return SUBS.includes(sub) ? sub : 'conversation';
+};
+
 export default function Assistant() {
   const { snapshot } = useNexus();
   const st = ASSISTANT_STATES[snapshot.assistant.state] || ASSISTANT_STATES.idle;
+  const [sub, setSub] = useState(subFromHash);
+  const cfg = useAssistantConfig();
+
+  useEffect(() => {
+    const onHash = () => setSub(subFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const change = (v) => {
+    window.history.replaceState(null, '', `#/assistant/${v}`);
+    setSub(v);
+  };
+
   return (
     <>
-      <PageHeader title="Assistant" subtitle="How the voice assistant sounds and behaves, and what it remembers.">
+      <PageHeader title="Assistant" subtitle="Talk to it from here, and set how it sounds, behaves and what it remembers.">
         <Pill tone={st.tone} pulse={snapshot.assistant.state !== 'idle'}>{st.label}</Pill>
+        <Segmented
+          value={sub}
+          onChange={change}
+          options={[
+            { value: 'conversation', label: 'Conversation', icon: MessagesSquare },
+            { value: 'settings', label: 'Settings', icon: Settings2 },
+          ]}
+        />
       </PageHeader>
-      <div className="assistant-grid">
-        <Settings />
-        <div className="stack">
-          <Memory />
-          <Notes />
+      {sub === 'conversation' && <Conversation config={cfg.config} />}
+      {sub === 'settings' && (
+        <div className="assistant-grid">
+          <Settings {...cfg} />
+          <div className="stack">
+            <Memory />
+            <Notes />
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
