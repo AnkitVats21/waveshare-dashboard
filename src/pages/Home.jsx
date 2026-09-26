@@ -8,8 +8,9 @@ import CommitSlider from '../components/CommitSlider';
 import { TrackArt, useTrackInfo } from '../components/Track';
 import { useNexus, LED_MODES } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
-import { getAlarms } from '../lib/api';
-import { formatBytes, formatIn, formatUptime, minutesUntil, pad2, signalLabel } from '../lib/format';
+import { getAlarms, getReminders } from '../lib/api';
+import { formatUntil, formatWhen, timeOf } from '../lib/schedule';
+import { formatBytes, formatUptime, signalLabel } from '../lib/format';
 
 export const ASSISTANT_STATES = {
   idle: { label: 'Waiting for wake word', tone: 'neutral' },
@@ -90,17 +91,30 @@ function UpNext() {
 
 function NextAlarm() {
   const { data: alarms } = usePoll(getAlarms, 60000);
-  const enabled = (alarms || []).filter((a) => a.enabled);
-  const next = enabled.map((a) => ({ ...a, inMin: minutesUntil(a.hour, a.minute) })).sort((a, b) => a.inMin - b.inMin)[0];
+  const { data: reminders } = usePoll(getReminders, 60000);
+  const now = Date.now() / 1000;
+  const next = (alarms || [])
+    .filter((a) => a.kind !== 'timer' && a.enabled && a.next_fire)
+    .sort((a, b) => a.next_fire - b.next_fire)[0];
+  const timers = (alarms || []).filter((a) => a.kind === 'timer').length;
+  const due = (reminders || []).filter((r) => r.pending).length;
   return (
     <Card title="Next alarm" icon={AlarmClock} action={<a className="link" href="#/alarms">Alarms <ChevronRight size={14} /></a>}>
       {next ? (
         <div className="big-time">
-          <span className="mono">{pad2(next.hour)}:{pad2(next.minute)}</span>
-          <span className="muted small">{formatIn(next.inMin)}</span>
+          <span className="mono">{timeOf(next)}</span>
+          <span className="muted small">
+            {[formatWhen(next.next_fire, now).replace(/ \d\d:\d\d$/, ''), formatUntil(next.next_fire - now), next.label].filter(Boolean).join(' · ')}
+          </span>
         </div>
       ) : (
         <p className="muted small">No alarms set.</p>
+      )}
+      {(timers > 0 || due > 0) && (
+        <div className="next-extra">
+          {timers > 0 && <a className="link" href="#/alarms/timers">{timers === 1 ? '1 timer running' : `${timers} timers running`}</a>}
+          {due > 0 && <a className="link" href="#/alarms/reminders">{due === 1 ? '1 reminder due' : `${due} reminders due`}</a>}
+        </div>
       )}
     </Card>
   );

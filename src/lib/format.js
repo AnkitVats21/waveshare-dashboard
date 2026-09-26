@@ -33,19 +33,6 @@ export function formatUptime(sec) {
 
 export const pad2 = (n) => n.toString().padStart(2, '0');
 
-// Minutes until an alarm at hour:minute next fires (0..1439).
-export function minutesUntil(hour, minute, now = new Date()) {
-  const diff = hour * 60 + minute - (now.getHours() * 60 + now.getMinutes());
-  return diff <= 0 ? diff + 1440 : diff;
-}
-
-export function formatIn(minutes) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (!h) return `in ${m} min`;
-  return m ? `in ${h} h ${m} min` : `in ${h} h`;
-}
-
 export function signalLabel(rssi) {
   if (!rssi) return 'No signal';
   if (rssi >= -55) return 'Excellent';
