@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Check, Download, Mic, Pause, Pencil, Play, Square, Trash2, X } from 'lucide-react';
+import { Check, Download, Mic, Pause, Pencil, Play, Speaker, Square, Trash2, X } from 'lucide-react';
 import { Button, Card, Empty, IconButton, PageHeader, Pill, Segmented } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
 import {
-  RECORDING_MODES, deleteRecording, downloadRecording, getRecordings, getStorageInfo, recordingUrl,
-  renameRecording, startRecording, stopRecording,
+  RECORDING_MODES, deleteRecording, downloadRecording, getRecordings, getStorageInfo, playRecordingOnDevice,
+  recordingTrackId, recordingUrl, renameRecording, startRecording, stopRecording,
 } from '../lib/api';
 import { formatBytes, formatClock } from '../lib/format';
 
@@ -18,6 +18,8 @@ const NAME_RE = /^[A-Za-z0-9 _\-.()]+$/;
 const MODE_LABELS = { stereo: 'Stereo', processed: 'Processed', unknown: 'Other' };
 
 const baseName = (file) => file.replace(/\.[^.]+$/, '');
+// The device's player decodes Ogg Opus only (the old WAV test files don't play there).
+const playsOnDevice = (file) => /\.(opus|ogg)$/i.test(file);
 
 function formatStarted(epoch) {
   if (!epoch) return 'Unknown date';
@@ -155,12 +157,24 @@ function RenameField({ rec, onDone }) {
   );
 }
 
-function RecordingRow({ rec, playing, renaming, onPlay, onRename, onRenamed, onDelete, onDownload }) {
+// device: 'playing' or 'paused' while this recording is the device's track, else null.
+function RecordingRow({ rec, playing, device, online, renaming, onPlay, onDevice, onRename, onRenamed, onDelete, onDownload }) {
   const mode = RECORDING_MODES[rec.mode] || 'unknown';
+  const deviceOk = playsOnDevice(rec.file);
+  const deviceLabel = !deviceOk ? 'The device plays Ogg Opus recordings only'
+    : device === 'playing' ? 'Pause on the device'
+      : device === 'paused' ? 'Resume on the device' : 'Play on the device';
   return (
-    <div className={clsx('rec-row', playing && 'is-selected')}>
+    <div className={clsx('rec-row', (playing || device) && 'is-selected')}>
       <div className="alarm">
-        <IconButton icon={playing ? Pause : Play} label={playing ? 'Stop playing' : 'Play here'} onClick={onPlay} />
+        <IconButton icon={playing ? Pause : Play} label={playing ? 'Stop playing here' : 'Play here'} onClick={onPlay} />
+        <IconButton
+          icon={device === 'playing' ? Pause : Speaker}
+          label={deviceLabel}
+          active={!!device}
+          disabled={!online || !deviceOk}
+          onClick={onDevice}
+        />
         <div className="alarm-main">
           {renaming ? (
             <RenameField rec={rec} onDone={onRenamed} />
@@ -192,8 +206,9 @@ function RecordingRow({ rec, playing, renaming, onPlay, onRename, onRenamed, onD
 
 export default function Recordings() {
   const toast = useToast();
-  const { snapshot, online } = useNexus();
+  const { snapshot, online, act } = useNexus();
   const state = snapshot.state || {};
+  const music = snapshot.music || {};
   const list = usePoll(getRecordings, 30000);
   const storage = usePoll(getStorageInfo, 60000);
   const reload = list.refresh;
@@ -224,6 +239,24 @@ export default function Recordings() {
     }
   };
 
+  const deviceState = (rec) => {
+    if (music.current_track?.id !== recordingTrackId(rec.id)) return null;
+    return music.state === 'PLAYING' ? 'playing' : music.state === 'PAUSED' ? 'paused' : null;
+  };
+
+  const playOnDevice = async (rec) => {
+    const st = deviceState(rec);
+    if (st === 'playing') return act('pause');
+    if (st === 'paused') return act('resume');
+    if (playingId === rec.id) setPlayingId(null);  // one place at a time
+    try {
+      await playRecordingOnDevice(rec.id);
+    } catch (err) {
+      toast(`Couldn't play on the device: ${err.message}`, 'error');
+    }
+    return undefined;
+  };
+
   const download = async (rec) => {
     try {
       await downloadRecording(rec.file);
@@ -234,7 +267,7 @@ export default function Recordings() {
 
   return (
     <>
-      <PageHeader title="Recordings" subtitle="Audio recorded on the device, saved on its SD card. Play them here, rename or download them." />
+      <PageHeader title="Recordings" subtitle="Audio recorded on the device, saved on its SD card. Play them here or on the device, rename or download them." />
       <RecorderCard state={state} online={online} onStopped={reload} />
       <Card
         title="Saved"
@@ -275,10 +308,13 @@ export default function Recordings() {
                 key={rec.id}
                 rec={rec}
                 playing={playingId === rec.id}
+                device={deviceState(rec)}
+                online={online}
                 renaming={renamingId === rec.id}
                 onPlay={() => setPlayingId(playingId === rec.id ? null : rec.id)}
+                onDevice={() => playOnDevice(rec)}
                 onRename={() => {
-                  // The device can't rename a file the browser is still reading.
+                  // The browser would keep requesting the old name.
                   if (playingId === rec.id) setPlayingId(null);
                   setRenamingId(rec.id);
                 }}

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Radio, Volume2, Volume1, VolumeX, Loader2,
-  RotateCcw, RotateCw,
+  RotateCcw, RotateCw, Square,
 } from 'lucide-react';
 import CommitSlider from './CommitSlider';
 import { IconButton } from './ui';
@@ -120,6 +120,13 @@ export default function PlayerBar() {
           >
             {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
           </button>
+          <IconButton
+            icon={Square}
+            label="Stop (clears the queue)"
+            className="hide-mobile"
+            disabled={disabled || !hasTrack}
+            onClick={() => act('stop')}
+          />
           <IconButton icon={RotateCw} label="Forward 10 s" className="hide-mobile" disabled={!canSeek} onClick={() => seekTo(pos + SKIP_MS)} />
           <IconButton icon={SkipForward} label="Next" disabled={disabled} onClick={() => act('next')} />
           <IconButton

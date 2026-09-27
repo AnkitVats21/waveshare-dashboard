@@ -171,6 +171,10 @@ export async function downloadRecording(file) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 // Returns {status, id, file}; the name keeps the file's extension.
+// Plays on the device's speaker, like a song (the player bar controls it).
+export const playRecordingOnDevice = (id) => request('/api/recordings/play', { method: 'POST', json: { id } });
+// The player's track id while a recording plays on the device.
+export const recordingTrackId = (id) => `file:${id}`;
 export const renameRecording = (id, name) => request('/api/recordings/rename', { method: 'POST', json: { id, name } });
 export const deleteRecording = (id) => request(`/api/recordings?${q({ id })}`, { method: 'DELETE' });
 // mode: 'stereo' (both mics) or 'processed' (the AFE output).
