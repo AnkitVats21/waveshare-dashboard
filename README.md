@@ -69,7 +69,6 @@ npm run ndb          # after a schema change in ../waveshare/schema/db/
 | `src/DeviceContext.jsx`, `src/hooks/useDevice.js` | The WebSocket connection, the live snapshot, actions |
 | `src/lib/api.js` | REST calls |
 | `src/lib/ndb.js`, `ndb_schema.js` | Generated nexus_db reader (don't edit by hand) |
-| `src/lib/catalog.js` | The music library file (`catalog.db`) |
 | `src/pages/`, `src/components/` | Pages and shared components (`ui.jsx` holds the basic building blocks) |
 
 A `Dockerfile` (nginx) is included for serving the dashboard from a PC.

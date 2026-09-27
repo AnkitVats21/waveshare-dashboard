@@ -118,37 +118,56 @@ function SearchView() {
 
 // ── SD library ────────────────────────────────────────────────────────────
 
-function LibraryRow({ track, onPlay, onDelete, disabled }) {
+// A song whose file isn't on the card stays listed (with its play count) as
+// "Not saved"; it plays by streaming.
+function LibraryRow({ track, onPlay, onDelete, disabled, starting }) {
   const info = useTrackInfo({ id: track.id, title: track.title, artist: track.artist });
   return (
-    <div className="row">
+    <div className={clsx('row', !track.cached && 'is-dim')}>
       <TrackArt id={track.id} size="sm" />
       <div className="row-text">
         <span className="ellipsis">{info.title || track.title}</span>
         <span className="muted small ellipsis">{info.artist || 'Local file'}</span>
       </div>
-      <span className="mono muted small hide-mobile">{formatBytes(track.sizeBytes)}</span>
-      <span className="mono muted small">{formatSeconds(track.durationSeconds)}</span>
-      <IconButton icon={Play} label="Play" disabled={disabled} onClick={() => onPlay(track)} />
-      <IconButton icon={Trash2} label="Delete from SD card" danger onClick={() => onDelete(track)} />
+      {track.cached ? (
+        <span className="mono muted small hide-mobile">{formatBytes(track.size)}</span>
+      ) : (
+        <span className="pill pill-neutral" title="The file isn't on the SD card; plays by streaming">Not saved</span>
+      )}
+      <span className="mono muted small">{formatSeconds(track.duration)}</span>
+      <IconButton
+        icon={starting ? Loader2 : Play}
+        label={track.cached ? 'Play from SD card' : 'Stream'}
+        disabled={disabled || starting}
+        onClick={() => onPlay(track)}
+      />
+      <IconButton
+        icon={Trash2}
+        label="Delete the file from the SD card"
+        danger
+        disabled={!track.cached}
+        onClick={() => onDelete(track)}
+      />
     </div>
   );
 }
 
 function LibraryView({ onCount }) {
-  const { online, setOptimisticTrack, controls } = useNexus();
+  const { online, setOptimisticTrack, controls, playTrack } = useNexus();
   const toast = useToast();
   const [tracks, setTracks] = useState([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [startingId, setStartingId] = useState(null);
+  const [savedOnly, setSavedOnly] = useState(false);
 
   const load = async (f = filter) => {
     try {
       const data = await getLibrary(f);
       const list = Array.isArray(data) ? data : data?.tracks || [];
       setTracks(list);
-      if (!f) onCount(list.length);
+      if (!f) onCount(list.filter((t) => t.cached).length);
       list.filter(needsResolution).forEach(async (t) => {
         const meta = await resolveTrackInfo(t.id);
         if (meta) setTracks((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...meta } : x)));
@@ -166,7 +185,7 @@ function LibraryView({ onCount }) {
     setScanning(true);
     try {
       const res = await scanLibrary();
-      toast(`Scan complete: ${res?.scanned_count ?? 0} tracks indexed`);
+      toast(`Scan complete: ${res?.scanned_count ?? 0} songs on the card`);
       await load();
     } catch (err) {
       toast(`Scan failed: ${err.message}`, 'error');
@@ -176,45 +195,65 @@ function LibraryView({ onCount }) {
   };
 
   const play = async (t) => {
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration };
+    if (!t.cached) {
+      setStartingId(t.id);
+      try {
+        await playTrack(track);
+      } finally {
+        setStartingId(null);
+      }
+      return;
+    }
     try {
-      await playLocal(t.id || t.filePath);
-      setOptimisticTrack({ id: t.id, title: t.title, artist: t.artist, duration: t.durationSeconds });
+      await playLocal(t.id);
+      setOptimisticTrack(track);
     } catch (err) {
       toast(`Playback failed: ${err.message}`, 'error');
     }
   };
 
   const remove = async (t) => {
-    if (!window.confirm(`Delete "${t.title}" from the SD card?`)) return;
+    if (!window.confirm(`Delete the saved file of "${t.title}"? It stays in the library and can still be streamed.`)) return;
     try {
       await deleteFromLibrary(t.id);
-      toast(`Deleted "${t.title}"`);
+      toast(`Deleted the file of "${t.title}"`);
       load();
     } catch (err) {
       toast(`Delete failed: ${err.message}`, 'error');
     }
   };
 
+  const shown = savedOnly ? tracks.filter((t) => t.cached) : tracks;
+
   return (
     <Card padded={false}>
       <div className="toolbar">
         <div className="search search-sm">
           <Search size={16} className="search-icon" />
-          <input value={filter} onChange={(e) => { setFilter(e.target.value); load(e.target.value); }} placeholder="Filter saved songs" aria-label="Filter" />
+          <input value={filter} onChange={(e) => { setFilter(e.target.value); load(e.target.value); }} placeholder="Filter the library" aria-label="Filter" />
         </div>
+        <Switch label="Saved only" checked={savedOnly} onChange={setSavedOnly} />
         <Switch label="Save streams to SD" checked={controls.caching.value} disabled={!online} onChange={controls.caching.commit} />
         <Button icon={RefreshCw} busy={scanning} onClick={scan}>Rescan</Button>
       </div>
       {loading ? (
         <div className="loading"><Loader2 className="spin" /></div>
-      ) : tracks.length === 0 ? (
-        <Empty icon={HardDriveDownload} title={filter ? 'No matches' : 'No songs saved yet'}>
+      ) : shown.length === 0 ? (
+        <Empty icon={HardDriveDownload} title={filter ? 'No matches' : savedOnly ? 'No songs saved yet' : 'No songs yet'}>
           {filter ? 'Try another filter.' : 'Turn on "Save streams to SD" and songs you play are kept for offline playback.'}
         </Empty>
       ) : (
         <div className="rows">
-          {tracks.map((t) => (
-            <LibraryRow key={t.id} track={t} disabled={!online} onPlay={play} onDelete={remove} />
+          {shown.map((t) => (
+            <LibraryRow
+              key={t.id}
+              track={t}
+              disabled={!online}
+              starting={startingId === t.id}
+              onPlay={play}
+              onDelete={remove}
+            />
           ))}
         </div>
       )}

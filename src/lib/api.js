@@ -5,7 +5,6 @@
 // OTA, logs) uses the REST API below. Search and stream-URL resolution hit the
 // Invidious-compatible resolver directly from the browser.
 
-import { CATALOG_PATH, filterTracks, parseCatalog } from './catalog';
 import { readNdb } from './ndb';
 import { NDB_SCHEMAS } from './ndb_schema';
 
@@ -92,20 +91,39 @@ export async function resolveStreamUrl(videoId) {
 
 // ── Music ──────────────────────────────────────────────────────────────────
 
-// The library is the raw catalog file, parsed here (lib/catalog.js).
+// The library is music.ndb itself, decoded here (lib/ndb.js): every song
+// played or found on the card. `cached` is false for a song whose file isn't
+// (or is no longer) on the card; it plays by streaming. Most recent first.
 // Filtering reuses the last fetch.
 let libraryCache = null;
 
+function filterTracks(tracks, filter) {
+  const f = filter.trim().toLowerCase();
+  if (!f) return tracks;
+  return tracks.filter((t) => [t.title, t.artist, t.id].some((s) => s.toLowerCase().includes(f)));
+}
+
 export async function getLibrary(filter = '') {
   if (!filter || !libraryCache) {
-    const res = await fetch(`${base()}/api/files/download?${q({ path: CATALOG_PATH })}`);
-    if (res.status === 404) {
-      libraryCache = [];
-    } else if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText}`);
-    } else {
-      libraryCache = parseCatalog(await res.arrayBuffer());
-    }
+    const res = await fetch(`${base()}/api/db/music`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status === 404 ? 'Library not ready yet' : `${res.status} ${res.statusText}`);
+    const db = readNdb(await res.arrayBuffer(), NDB_SCHEMAS.music);
+    libraryCache = [...db.collections.tracks]
+      .map(([id, d]) => ({
+        id,
+        // Titles cut by the old catalog's fixed fields can end mid-character.
+        title: d.title.replace(/\uFFFD+$/, ''),
+        artist: d.artist,
+        album: d.album,
+        duration: Math.floor(d.duration_ms / 1000),
+        size: d.file_size,
+        cached: d.file_size > 0,
+        has_thumb: d.thumbnail,
+        added_at: d.added_at,
+        last_played_at: d.last_played_at,
+        play_count: d.play_count,
+      }))
+      .sort((a, b) => (b.last_played_at || b.added_at) - (a.last_played_at || a.added_at));
   }
   return filterTracks(libraryCache, filter);
 }

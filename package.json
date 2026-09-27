@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "ndb": "cp ../waveshare/tools/starc/js/ndb.js src/lib/ndb.js && python3 ../waveshare/tools/starc/starc.py db ../waveshare/schema/db/system.star ../waveshare/schema/db/recordings.star --js src/lib/ndb_schema.js",
+    "ndb": "cp ../waveshare/tools/starc/js/ndb.js src/lib/ndb.js && python3 ../waveshare/tools/starc/starc.py db ../waveshare/schema/db/system.star ../waveshare/schema/db/recordings.star ../waveshare/schema/db/music.star --js src/lib/ndb_schema.js",
     "bundle": "vite build --mode device && python3 ../waveshare/tools/webbundle/mkbundle.py dist -o nexus-web.bin",
     "deploy": "vite build --mode device && python3 ../waveshare/tools/webbundle/mkbundle.py dist -o nexus-web.bin --upload http://${NEXUS_HOST:-192.168.1.14}"
   },
