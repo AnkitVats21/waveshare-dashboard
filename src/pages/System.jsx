@@ -118,6 +118,9 @@ function Flash() {
   const firstOffset = parts.length ? parts[0].offset : 0;
   const unallocated = Math.max(0, chip - firstOffset - mapped);
   const groups = Object.keys(FLASH_GROUPS).filter((g) => parts.some((p) => flashGroup(p) === g));
+  // Small system partitions with nothing to show but a size share one row.
+  const minor = parts.filter((p) => flashGroup(p) === 'other' && p.used === undefined && !p.detail);
+  const listed = parts.filter((p) => !minor.includes(p));
   return (
     <Card title="Flash" icon={MemoryStick}>
       {!data ? (
@@ -140,10 +143,24 @@ function Flash() {
             {groups.map((g) => (
               <span key={g}><span className="flash-dot" style={{ background: FLASH_GROUPS[g].color }} />{FLASH_GROUPS[g].name}</span>
             ))}
-            <span className="flash-legend-total mono">{formatBytes(chip)}{unallocated > 0 ? ` · ${formatBytes(unallocated)} free` : ''}</span>
+            <span className="flash-legend-total mono">
+              {formatBytes(chip)}{unallocated > 0 ? ` · ${formatBytes(unallocated)} unallocated` : ''}
+            </span>
           </div>
           <div className="flash-parts">
-            {parts.map((p) => <FlashPartition key={p.label} p={p} />)}
+            {listed.map((p) => <FlashPartition key={p.label} p={p} />)}
+            {minor.length > 0 && (
+              <div className="flash-part">
+                <div className="flash-part-head">
+                  <span className="flash-part-name">
+                    <span className="flash-dot" style={{ background: FLASH_GROUPS.other.color }} />
+                    <span className="mono">system</span>
+                  </span>
+                  <span className="mono muted small">{formatBytes(minor.reduce((n, p) => n + p.size, 0))}</span>
+                </div>
+                <span className="muted small">{minor.map((p) => p.label).join(', ')}</span>
+              </div>
+            )}
           </div>
         </>
       )}
