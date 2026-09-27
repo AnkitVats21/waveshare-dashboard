@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { Home as HomeIcon, Music2, Sparkles, AlarmClock, SlidersHorizontal, Cpu, Moon, Sun, Monitor } from 'lucide-react';
+import { Home as HomeIcon, Music2, Sparkles, AlarmClock, Mic, SlidersHorizontal, Cpu, Moon, Sun, Monitor } from 'lucide-react';
 import { useNexus } from './DeviceContext';
 import PlayerBar from './components/PlayerBar';
 import AlarmRinging from './components/AlarmRinging';
@@ -8,6 +8,7 @@ import Home from './pages/Home';
 import Music from './pages/Music';
 import Assistant from './pages/Assistant';
 import Alarms from './pages/Alarms';
+import Recordings from './pages/Recordings';
 import Device from './pages/Device';
 import System from './pages/System';
 
@@ -16,6 +17,7 @@ export const PAGES = [
   { id: 'music', label: 'Music', icon: Music2, component: Music },
   { id: 'assistant', label: 'Assistant', icon: Sparkles, component: Assistant },
   { id: 'alarms', label: 'Alarms', icon: AlarmClock, component: Alarms },
+  { id: 'recordings', label: 'Recordings', short: 'Record', icon: Mic, component: Recordings },
   { id: 'device', label: 'Device', icon: SlidersHorizontal, component: Device },
   { id: 'system', label: 'System', icon: Cpu, component: System },
 ];
@@ -137,7 +139,7 @@ export default function App() {
         {PAGES.map((p) => (
           <a key={p.id} href={`#/${p.id}`} className={clsx('tab', page === p.id && 'is-active')}>
             <p.icon size={20} />
-            <span>{p.label}</span>
+            <span>{p.short || p.label}</span>
           </a>
         ))}
       </nav>

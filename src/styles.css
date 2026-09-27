@@ -530,6 +530,19 @@ textarea { resize: vertical; line-height: 1.5; }
 .alarm-actions .switch { margin-left: 8px; }
 .alarm.is-selected { background: var(--accent-soft); }
 .reminder-text { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+
+/* Recordings */
+.rec-recorder { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.rec-live { flex: 1; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.rec-timer { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.rec-filter { padding: 0 16px 12px 20px; }
+.rec-row.is-selected { background: var(--accent-soft); }
+.rec-row .alarm { padding-left: 12px; }
+.rec-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.rec-rename { display: flex; align-items: center; gap: 4px; }
+.rec-rename input { flex: 1; min-width: 0; }
+.rec-rename input[aria-invalid="true"] { border-color: var(--danger); }
+.rec-audio { display: block; width: calc(100% - 32px); margin: 0 16px 14px; height: 36px; }
 .day-picker { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
 .day {
   height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
@@ -692,7 +705,7 @@ textarea { resize: vertical; line-height: 1.5; }
   .page-header .segmented button { flex: 1; justify-content: center; }
 
   .tabbar {
-    grid-area: tabbar; display: grid; grid-template-columns: repeat(6, 1fr);
+    grid-area: tabbar; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
     background: var(--surface); border-top: 1px solid var(--border);
     padding-bottom: env(safe-area-inset-bottom);
   }

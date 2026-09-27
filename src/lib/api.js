@@ -6,6 +6,8 @@
 // Invidious-compatible resolver directly from the browser.
 
 import { CATALOG_PATH, filterTracks, parseCatalog } from './catalog';
+import { readNdb } from './ndb';
+import { NDB_SCHEMAS } from './ndb_schema';
 
 // The device build (`npm run bundle`, served by the ESP itself) talks to the
 // host it was loaded from; dev builds default to the fixed LAN address.
@@ -138,6 +140,42 @@ export const uploadAlert = (name, file) =>
     body: file,
     headers: { 'Content-Type': 'application/octet-stream' },
   });
+
+// ── Recordings ─────────────────────────────────────────────────────────────
+
+export const RECORDINGS_DIR = '/sdcard/recordings';
+export const RECORDING_MODES = { 0: 'unknown', 1: 'stereo', 2: 'processed' };
+
+// The list is recordings.ndb itself, decoded here (lib/ndb.js), newest first.
+// Each entry: {id, file, started, duration_ms, mode, sample_rate, channels, size}.
+export async function getRecordings() {
+  const res = await fetch(`${base()}/api/db/recordings`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(res.status === 404 ? 'Recordings list not ready yet' : `${res.status} ${res.statusText}`);
+  const db = readNdb(await res.arrayBuffer(), NDB_SCHEMAS.recordings);
+  return [...db.collections.recordings]
+    .map(([key, doc]) => ({ id: Number(key), ...doc }))
+    .sort((a, b) => (b.started - a.started) || (b.id - a.id));
+}
+// The file with Range support, so <audio> can seek.
+export const recordingUrl = (file) => `${base()}/api/files/download?${q({ path: `${RECORDINGS_DIR}/${file}` })}`;
+// Saves the file in the browser. Through a Blob because <a download> is
+// ignored across origins (dev builds load from another host than the device).
+export async function downloadRecording(file) {
+  const res = await fetch(recordingUrl(file));
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Returns {status, id, file}; the name keeps the file's extension.
+export const renameRecording = (id, name) => request('/api/recordings/rename', { method: 'POST', json: { id, name } });
+export const deleteRecording = (id) => request(`/api/recordings?${q({ id })}`, { method: 'DELETE' });
+// mode: 'stereo' (both mics) or 'processed' (the AFE output).
+export const startRecording = (mode) => request(`/api/audio/record/start?${q({ mode })}`, { method: 'POST' });
+export const stopRecording = () => request('/api/audio/record/stop', { method: 'POST' });
 
 // ── Alarms ─────────────────────────────────────────────────────────────────
 
