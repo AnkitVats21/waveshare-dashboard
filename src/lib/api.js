@@ -248,6 +248,8 @@ export const deleteFile = (path) => request(`/api/files?${q({ path })}`, { metho
 
 export const getMetrics = () => request('/api/system/metrics');
 export const getStorageInfo = () => request('/api/storage/info');
+// Partitions with offset, size and (where known) used bytes, version, detail.
+export const getFlashInfo = () => request('/api/system/flash');
 export const getFirmwareStatus = () => request('/api/ota/status');
 export const getFrontendStatus = () => request('/api/ota/frontend');
 export const rollbackFrontend = () => request('/api/ota/frontend/rollback', { method: 'POST' });

@@ -371,6 +371,19 @@ textarea { resize: vertical; line-height: 1.5; }
 .meter-warn { background: var(--warn); }
 .meter-danger { background: var(--danger); }
 
+.flash-map { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.flash-seg { min-width: 2px; height: 100%; }
+.flash-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 10px 0 6px; }
+.flash-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.flash-legend-total { margin-left: auto; }
+.flash-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.flash-parts { display: flex; flex-direction: column; }
+.flash-part { display: flex; flex-direction: column; gap: 5px; padding: 9px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+.flash-part:last-child { border-bottom: 0; }
+.flash-part-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
+.flash-part-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.flash-part .pill { height: 20px; padding: 0 8px; font-size: 11px; }
+
 .kv { display: flex; flex-direction: column; }
 .kv-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .kv-row:last-child { border-bottom: 0; }

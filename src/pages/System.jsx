@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
-  Cpu, Wifi, HardDrive, Package, Globe, Power, Terminal, Upload, RotateCcw, Pause, Play, Trash2, Link2,
+  Cpu, Wifi, HardDrive, Package, Globe, Power, Terminal, Upload, RotateCcw, Pause, Play, Trash2, Link2, MemoryStick,
 } from 'lucide-react';
 import { Banner, Button, Card, Meter, PageHeader, Pill, Row, Stat } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
 import {
-  getFirmwareStatus, getFrontendStatus, getLogs, getMetrics, getStorageInfo, isDeviceBuild, reboot, rollbackFrontend, uploadFirmware,
+  getFirmwareStatus, getFlashInfo, getFrontendStatus, getLogs, getMetrics, getStorageInfo, isDeviceBuild, reboot, rollbackFrontend, uploadFirmware,
 } from '../lib/api';
 import { formatBytes, formatUptime, signalLabel } from '../lib/format';
 
@@ -70,6 +70,84 @@ function Network() {
         )}
       </Card>
     </>
+  );
+}
+
+// ── Flash ─────────────────────────────────────────────────────────────────
+
+const FLASH_GROUPS = {
+  app: { color: 'var(--accent)', name: 'Firmware' },
+  www: { color: 'var(--warn)', name: 'Dashboard' },
+  model: { color: 'var(--ok)', name: 'Wake word' },
+  other: { color: 'var(--text-3)', name: 'Settings and system' },
+};
+
+const flashGroup = (p) =>
+  p.type === 'app' ? 'app' : p.label.startsWith('www') ? 'www' : p.label === 'model' ? 'model' : 'other';
+
+const activeLabel = (p) => (p.type === 'app' ? 'running' : 'live');
+
+function FlashPartition({ p }) {
+  const group = FLASH_GROUPS[flashGroup(p)];
+  const known = p.used !== undefined;
+  const empty = known && p.used === 0 && (p.type === 'app' || p.label.startsWith('www'));
+  const note = [p.version && `v${p.version}`, p.detail].filter(Boolean).join(' · ');
+  return (
+    <div className="flash-part">
+      <div className="flash-part-head">
+        <span className="flash-part-name">
+          <span className="flash-dot" style={{ background: group.color }} />
+          <span className="mono">{p.label}</span>
+          {p.active && <Pill tone="ok">{activeLabel(p)}</Pill>}
+        </span>
+        <span className="mono muted small">
+          {empty ? 'empty · ' : known ? `${formatBytes(p.used)} of ` : ''}{formatBytes(p.size)}
+        </span>
+      </div>
+      {known && !empty && <Meter value={p.used} max={p.size} />}
+      {note && <span className="muted small ellipsis">{note}</span>}
+    </div>
+  );
+}
+
+function Flash() {
+  const { data } = usePoll(getFlashInfo, 60000);
+  const parts = data?.partitions ? [...data.partitions].sort((a, b) => a.offset - b.offset) : [];
+  const chip = data?.chip_size || 0;
+  const mapped = parts.reduce((n, p) => n + p.size, 0);
+  const firstOffset = parts.length ? parts[0].offset : 0;
+  const unallocated = Math.max(0, chip - firstOffset - mapped);
+  const groups = Object.keys(FLASH_GROUPS).filter((g) => parts.some((p) => flashGroup(p) === g));
+  return (
+    <Card title="Flash" icon={MemoryStick}>
+      {!data ? (
+        <div className="loading" />
+      ) : (
+        <>
+          <div className="flash-map" role="img" aria-label="Flash layout">
+            <div className="flash-seg" style={{ flexGrow: firstOffset, background: 'var(--surface-3)' }} title={`Bootloader and partition table: ${formatBytes(firstOffset)}`} />
+            {parts.map((p) => (
+              <div
+                key={p.label}
+                className="flash-seg"
+                style={{ flexGrow: p.size, background: FLASH_GROUPS[flashGroup(p)].color }}
+                title={`${p.label}: ${formatBytes(p.size)}`}
+              />
+            ))}
+            {unallocated > 0 && <div className="flash-seg" style={{ flexGrow: unallocated }} title={`Unallocated: ${formatBytes(unallocated)}`} />}
+          </div>
+          <div className="flash-legend muted small">
+            {groups.map((g) => (
+              <span key={g}><span className="flash-dot" style={{ background: FLASH_GROUPS[g].color }} />{FLASH_GROUPS[g].name}</span>
+            ))}
+            <span className="flash-legend-total mono">{formatBytes(chip)}{unallocated > 0 ? ` · ${formatBytes(unallocated)} free` : ''}</span>
+          </div>
+          <div className="flash-parts">
+            {parts.map((p) => <FlashPartition key={p.label} p={p} />)}
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -317,6 +395,7 @@ export default function System() {
         </div>
         <div className="stack">
           <Network />
+          <Flash />
           <WebApp />
         </div>
         <Logs />
