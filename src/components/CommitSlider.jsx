@@ -10,6 +10,7 @@ export default function CommitSlider({
   step = 1,
   value,
   onCommit,
+  onDrag,  // optional: called with the value while dragging, null on release
   disabled = false,
   className = '',
   formatFill = true,
@@ -28,6 +29,7 @@ export default function CommitSlider({
   const commit = () => {
     if (!dragging) return;
     setDragging(false);
+    onDrag?.(null);
     onCommit(dragValue);
   };
 
@@ -42,8 +44,10 @@ export default function CommitSlider({
       className={`commit-slider ${className}`}
       style={formatFill ? { '--slider-fill': `${pct}%` } : undefined}
       onChange={(e) => {
+        const v = Number(e.target.value);
         setDragging(true);
-        setDragValue(Number(e.target.value));
+        setDragValue(v);
+        onDrag?.(v);
       }}
       onMouseUp={commit}
       onTouchEnd={commit}

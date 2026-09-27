@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Radio, Volume2, Volume1, VolumeX, Loader2,
+  RotateCcw, RotateCw,
 } from 'lucide-react';
 import CommitSlider from './CommitSlider';
 import { IconButton } from './ui';
@@ -11,10 +12,27 @@ import { formatClock } from '../lib/format';
 
 const REPEAT_LABELS = ['Repeat: off', 'Repeat: this track', 'Repeat: all'];
 
-// Position that ticks locally between the device's ~2 s snapshots.
+const SKIP_MS = 10000;
+// After a seek, snapshots far from the target are ignored for this long: one
+// sent before the seek landed would pull the bar back to the old position.
+const SEEK_SETTLE_MS = 4000;
+
+// Position that ticks locally between the device's ~2 s snapshots. jump(ms)
+// moves it at once after a seek.
 function useLivePosition(music, playing) {
   const [pos, setPos] = useState(music.position_ms || 0);
-  useEffect(() => setPos(music.position_ms || 0), [music.position_ms]);
+  const seek = useRef(null);  // { target, at }
+  useEffect(() => {
+    const p = music.position_ms || 0;
+    const s = seek.current;
+    if (s) {
+      const age = Date.now() - s.at;
+      const expected = s.target + (playing ? age : 0);
+      if (age < SEEK_SETTLE_MS && Math.abs(p - expected) > 3000) return;
+      seek.current = null;
+    }
+    setPos(p);
+  }, [music.position_ms]);
   useEffect(() => {
     if (!playing) return undefined;
     const id = setInterval(() => {
@@ -22,7 +40,11 @@ function useLivePosition(music, playing) {
     }, 500);
     return () => clearInterval(id);
   }, [playing, music.duration_ms]);
-  return pos;
+  const jump = (ms) => {
+    seek.current = { target: ms, at: Date.now() };
+    setPos(ms);
+  };
+  return [pos, jump];
 }
 
 export default function PlayerBar() {
@@ -33,8 +55,15 @@ export default function PlayerBar() {
   const busy = music.state === 'RESOLVING' || music.state === 'BUFFERING';
   const hasTrack = !!(currentTrack?.id || currentTrack?.title);
   const info = useTrackInfo(currentTrack);
-  const pos = useLivePosition(music, playing);
+  const [pos, jump] = useLivePosition(music, playing);
+  const [dragPos, setDragPos] = useState(null);
   const hasDuration = music.duration_ms > 0;
+  const canSeek = online && hasDuration && music.seekable;
+  const seekTo = (ms) => {
+    const v = Math.max(0, Math.min(Math.round(ms), music.duration_ms - 1000));
+    jump(v);
+    act('seek', { value: v });
+  };
   const [lastVolume, setLastVolume] = useState(60);
   const disabled = !online;
 
@@ -81,6 +110,7 @@ export default function PlayerBar() {
             onClick={() => repeat.commit((repeat.value + 1) % 3)}
           />
           <IconButton icon={SkipBack} label="Previous" className="hide-mobile" disabled={disabled} onClick={() => act('prev')} />
+          <IconButton icon={RotateCcw} label="Back 10 s" className="hide-mobile" disabled={!canSeek} onClick={() => seekTo(pos - SKIP_MS)} />
           <button
             className="play-btn"
             onClick={() => act(playing ? 'pause' : 'resume')}
@@ -90,6 +120,7 @@ export default function PlayerBar() {
           >
             {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
           </button>
+          <IconButton icon={RotateCw} label="Forward 10 s" className="hide-mobile" disabled={!canSeek} onClick={() => seekTo(pos + SKIP_MS)} />
           <IconButton icon={SkipForward} label="Next" disabled={disabled} onClick={() => act('next')} />
           <IconButton
             icon={Radio}
@@ -101,13 +132,14 @@ export default function PlayerBar() {
           />
         </div>
         <div className="player-scrub">
-          <span className="mono time">{formatClock(pos)}</span>
+          <span className="mono time">{formatClock(dragPos ?? pos)}</span>
           <CommitSlider
             min={0}
             max={hasDuration ? music.duration_ms : 100}
             value={hasDuration ? Math.min(pos, music.duration_ms) : 0}
-            disabled={disabled || !hasDuration || !music.seekable}
-            onCommit={(v) => act('seek', { value: v })}
+            disabled={!canSeek}
+            onDrag={setDragPos}
+            onCommit={seekTo}
             aria-label="Seek"
           />
           <span className="mono time">{hasDuration ? formatClock(music.duration_ms) : '--:--'}</span>
