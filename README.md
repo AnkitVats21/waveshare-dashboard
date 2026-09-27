@@ -11,7 +11,7 @@ else over the REST API.
 | Page | What |
 |---|---|
 | Home | Now playing, up next, next alarm, quick controls, assistant, device health |
-| Music | Search, queue, library (songs saved on the card), player |
+| Music | Search, queue, library (every song played; saved ones play offline), player (with a link to the song on YouTube) |
 | Assistant | Talk to it, live transcript, voice and personality settings, notes and memory |
 | Alarms | Alarms, timers, reminders, the device clock |
 | Recordings | Record (stereo/processed), play in the browser or on the device, rename, download, delete |

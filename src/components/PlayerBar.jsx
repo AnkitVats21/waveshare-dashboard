@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Radio, Volume2, Volume1, VolumeX, Loader2,
-  RotateCcw, RotateCw, Square,
+  RotateCcw, RotateCw, Square, ExternalLink,
 } from 'lucide-react';
 import CommitSlider from './CommitSlider';
 import { IconButton } from './ui';
 import { TrackArt, useTrackInfo } from './Track';
 import { useNexus } from '../DeviceContext';
 import { formatClock } from '../lib/format';
+import { looksLikeVideoId } from '../lib/trackMetadata';
 
 const REPEAT_LABELS = ['Repeat: off', 'Repeat: this track', 'Repeat: all'];
 
@@ -97,6 +98,14 @@ export default function PlayerBar() {
             )}
           </span>
         </div>
+        {looksLikeVideoId(currentTrack?.id) && (
+          <IconButton
+            icon={ExternalLink}
+            label="Open on YouTube"
+            size={16}
+            onClick={() => window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(currentTrack.id)}`, '_blank', 'noopener')}
+          />
+        )}
       </div>
 
       <div className="player-center">
