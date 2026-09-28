@@ -26,6 +26,10 @@ const stripModelPrefix = (m) => (m || '').replace(/^models\//, '');
 
 const SILENCE_MIN = 3;
 const SILENCE_MAX = 60;
+const RESUME_MIN_LIMIT = 0;
+const RESUME_MAX_LIMIT = 120;
+const KEEPALIVE_MIN = 0;
+const KEEPALIVE_MAX = 180;
 
 const formFrom = (cfg) => ({
   voice: cfg.voice || '',
@@ -34,6 +38,9 @@ const formFrom = (cfg) => ({
   transcripts: cfg.transcripts ?? true,
   transcript_log: cfg.transcript_log ?? true,
   manual_silence_s: cfg.manual_silence_s ?? 10,
+  resume_min: cfg.resume_min ?? 60,
+  keepalive_s: cfg.keepalive_s ?? 60,
+  echo_measure: cfg.echo_measure ?? false,
 });
 
 // The Gemini config, loaded once for both tabs.
@@ -72,6 +79,14 @@ function Settings({ config, loadError, load }) {
       if (!(silence >= SILENCE_MIN && silence <= SILENCE_MAX)) {
         throw new Error(`The silence timeout must be ${SILENCE_MIN}-${SILENCE_MAX} s`);
       }
+      const resume = Math.round(Number(form.resume_min));
+      if (!(resume >= RESUME_MIN_LIMIT && resume <= RESUME_MAX_LIMIT)) {
+        throw new Error(`Continue last conversation must be ${RESUME_MIN_LIMIT}-${RESUME_MAX_LIMIT} minutes`);
+      }
+      const keepalive = Math.round(Number(form.keepalive_s));
+      if (!(keepalive >= KEEPALIVE_MIN && keepalive <= KEEPALIVE_MAX)) {
+        throw new Error(`Keep connection open must be ${KEEPALIVE_MIN}-${KEEPALIVE_MAX} s`);
+      }
       const body = {
         ...rest,
         voice: form.voice,
@@ -80,6 +95,9 @@ function Settings({ config, loadError, load }) {
         transcripts: form.transcripts,
         transcript_log: form.transcript_log,
         manual_silence_s: silence,
+        resume_min: resume,
+        keepalive_s: keepalive,
+        echo_measure: !!form.echo_measure,
       };
       for (const k of ['voice', 'model', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
@@ -154,6 +172,34 @@ function Settings({ config, loadError, load }) {
             className="narrow-input"
           />
         </Field>
+        <Field label="Continue the last conversation within (minutes)" hint={`A session started within this many minutes of the last one continues that conversation; 0 = always start fresh. ${RESUME_MIN_LIMIT}-${RESUME_MAX_LIMIT} min.`}>
+          <input
+            type="number"
+            min={RESUME_MIN_LIMIT}
+            max={RESUME_MAX_LIMIT}
+            value={form.resume_min}
+            onChange={set('resume_min')}
+            className="narrow-input"
+          />
+        </Field>
+        <Field label="Keep the connection open after a session (seconds)" hint={`The connection stays open this long after a session so a quick follow-up wake starts instantly; 0 = close at once. ${KEEPALIVE_MIN}-${KEEPALIVE_MAX} s.`}>
+          <input
+            type="number"
+            min={KEEPALIVE_MIN}
+            max={KEEPALIVE_MAX}
+            value={form.keepalive_s}
+            onChange={set('keepalive_s')}
+            className="narrow-input"
+          />
+        </Field>
+      </div>
+      <div className="settings-group">
+        <div className="settings-group-title small">Diagnostics</div>
+        <Switch
+          checked={form.echo_measure}
+          onChange={setValue('echo_measure')}
+          label="Echo measurement: log how much echo the mic picks up during replies (barge-in study)"
+        />
       </div>
       <Field label="Gemini API key" hint={config.api_key_set ? 'A key is saved on the SD card. It is never shown; type a new one to replace it.' : 'No key on the SD card; the key built into the firmware is used.'}>
         <div className="input-icon">

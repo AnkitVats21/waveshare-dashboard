@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 499542342,
+    "hash": 3670446621,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -81,6 +81,21 @@ export const NDB_SCHEMAS = {
             "name": "manual_silence_s",
             "type": "u8",
             "default": 10
+          },
+          "8": {
+            "name": "resume_min",
+            "type": "u8",
+            "default": 60
+          },
+          "9": {
+            "name": "keepalive_s",
+            "type": "u8",
+            "default": 60
+          },
+          "10": {
+            "name": "echo_measure",
+            "type": "bool",
+            "default": false
           }
         }
       },
