@@ -41,6 +41,7 @@ const formFrom = (cfg) => ({
   resume_min: cfg.resume_min ?? 60,
   keepalive_s: cfg.keepalive_s ?? 60,
   echo_measure: cfg.echo_measure ?? false,
+  barge_in: cfg.barge_in ?? false,
 });
 
 // The Gemini config, loaded once for both tabs.
@@ -98,6 +99,7 @@ function Settings({ config, loadError, load }) {
         resume_min: resume,
         keepalive_s: keepalive,
         echo_measure: !!form.echo_measure,
+        barge_in: !!form.barge_in,
       };
       for (const k of ['voice', 'model', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
@@ -161,6 +163,11 @@ function Settings({ config, loadError, load }) {
           disabled={!form.transcripts}
           onChange={setValue('transcript_log')}
           label="Also print each turn to the device log"
+        />
+        <Switch
+          checked={form.barge_in}
+          onChange={setValue('barge_in')}
+          label="Barge-in: talk over a reply to interrupt it (experimental)"
         />
         <Field label="Silence timeout (s)" hint={`For conversations started from this dashboard: how long it waits for you to speak before ending. The wake word always uses 3 s. ${SILENCE_MIN}-${SILENCE_MAX} s.`}>
           <input
