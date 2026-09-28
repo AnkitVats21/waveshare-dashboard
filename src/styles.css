@@ -523,6 +523,24 @@ textarea { resize: vertical; line-height: 1.5; }
 .settings-group { display: flex; flex-direction: column; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .settings-group-title { font-weight: 600; color: var(--text-2); }
 .narrow-input { max-width: 120px; }
+.vad-group { display: flex; flex-direction: column; gap: 8px; margin: 2px 0; }
+.vad-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  width: fit-content;
+}
+.vad-toggle:hover { color: var(--text); }
+.vad-chevron { transition: transform 0.15s ease; color: var(--text-3); }
+.vad-chevron.is-open { transform: rotate(180deg); }
+.vad-fields { padding-top: 4px; }
 @media (max-width: 640px) {
   .bubble { max-width: 88%; }
 }

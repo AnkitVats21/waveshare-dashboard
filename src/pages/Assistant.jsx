@@ -30,6 +30,10 @@ const RESUME_MIN_LIMIT = 0;
 const RESUME_MAX_LIMIT = 120;
 const KEEPALIVE_MIN = 0;
 const KEEPALIVE_MAX = 180;
+const VAD_PREFIX_MIN = 0;
+const VAD_PREFIX_MAX = 2000;
+const VAD_SILENCE_MIN = 0;
+const VAD_SILENCE_MAX = 5000;
 
 const SEARCH_STATUS = {
   yes: 'Search works',
@@ -49,6 +53,10 @@ const formFrom = (cfg) => ({
   echo_measure: cfg.echo_measure ?? false,
   barge_in: cfg.barge_in ?? false,
   web_search: cfg.web_search ?? true,
+  vad_start: cfg.vad_start ?? 1,
+  vad_end: cfg.vad_end ?? 0,
+  vad_prefix_ms: cfg.vad_prefix_ms ?? 0,
+  vad_silence_ms: cfg.vad_silence_ms ?? 0,
 });
 
 // The Gemini config, loaded once for both tabs.
@@ -72,6 +80,7 @@ function Settings({ config, loadError, load }) {
   const [form, setForm] = useState(() => formFrom(config || {}));
   const [newKey, setNewKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [vadOpen, setVadOpen] = useState(false);
   const [modelList, setModelList] = useState(null);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState(null);
@@ -121,6 +130,22 @@ function Settings({ config, loadError, load }) {
       if (!(keepalive >= KEEPALIVE_MIN && keepalive <= KEEPALIVE_MAX)) {
         throw new Error(`Keep connection open must be ${KEEPALIVE_MIN}-${KEEPALIVE_MAX} s`);
       }
+      const vadStart = Math.round(Number(form.vad_start));
+      if (!(vadStart >= 0 && vadStart <= 2)) {
+        throw new Error('Start-of-speech sensitivity must be 0, 1, or 2');
+      }
+      const vadEnd = Math.round(Number(form.vad_end));
+      if (!(vadEnd >= 0 && vadEnd <= 2)) {
+        throw new Error('End-of-speech sensitivity must be 0, 1, or 2');
+      }
+      const vadPrefix = Math.round(Number(form.vad_prefix_ms));
+      if (!(vadPrefix >= VAD_PREFIX_MIN && vadPrefix <= VAD_PREFIX_MAX)) {
+        throw new Error(`Speech prefix must be ${VAD_PREFIX_MIN}-${VAD_PREFIX_MAX} ms`);
+      }
+      const vadSilence = Math.round(Number(form.vad_silence_ms));
+      if (!(vadSilence >= VAD_SILENCE_MIN && vadSilence <= VAD_SILENCE_MAX)) {
+        throw new Error(`Silence duration must be ${VAD_SILENCE_MIN}-${VAD_SILENCE_MAX} ms`);
+      }
       const body = {
         ...rest,
         voice: form.voice,
@@ -134,6 +159,10 @@ function Settings({ config, loadError, load }) {
         echo_measure: !!form.echo_measure,
         barge_in: !!form.barge_in,
         web_search: !!form.web_search,
+        vad_start: vadStart,
+        vad_end: vadEnd,
+        vad_prefix_ms: vadPrefix,
+        vad_silence_ms: vadSilence,
       };
       for (const k of ['voice', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
@@ -240,6 +269,66 @@ function Settings({ config, loadError, load }) {
           onChange={setValue('web_search')}
           label="Google Search: let the assistant search the web for up-to-date information"
         />
+        <div className="vad-group">
+          <button
+            type="button"
+            className="vad-toggle"
+            onClick={() => setVadOpen((o) => !o)}
+            aria-expanded={vadOpen}
+          >
+            <ChevronDown
+              size={15}
+              className={clsx('vad-chevron', vadOpen && 'is-open')}
+            />
+            <span>Voice detection (advanced)</span>
+          </button>
+          {vadOpen && (
+            <div className="form-grid vad-fields">
+              <Field label="Start-of-speech sensitivity" hint="Low: reply echo and room noise interrupt less often">
+                <select value={form.vad_start} onChange={set('vad_start')}>
+                  <option value={0}>Gemini default</option>
+                  <option value={1}>Low</option>
+                  <option value={2}>High</option>
+                </select>
+              </Field>
+              <Field label="End-of-speech sensitivity" hint="Low: waits longer before answering">
+                <select value={form.vad_end} onChange={set('vad_end')}>
+                  <option value={0}>Gemini default</option>
+                  <option value={1}>Low</option>
+                  <option value={2}>High</option>
+                </select>
+              </Field>
+              <Field
+                label="Speech prefix (ms)"
+                hint="Speech needed before a start counts. 0 = Gemini default."
+              >
+                <input
+                  type="number"
+                  min={VAD_PREFIX_MIN}
+                  max={VAD_PREFIX_MAX}
+                  value={form.vad_prefix_ms}
+                  onChange={set('vad_prefix_ms')}
+                  placeholder="0 (Gemini default)"
+                  className="narrow-input"
+                />
+              </Field>
+              <Field
+                label="Silence duration (ms)"
+                hint="Longer lets you pause mid-sentence. 0 = Gemini default."
+              >
+                <input
+                  type="number"
+                  min={VAD_SILENCE_MIN}
+                  max={VAD_SILENCE_MAX}
+                  value={form.vad_silence_ms}
+                  onChange={set('vad_silence_ms')}
+                  placeholder="0 (Gemini default)"
+                  className="narrow-input"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
         <Field label="Silence timeout (s)" hint={`For conversations started from this dashboard: how long it waits for you to speak before ending. The wake word always uses 3 s. ${SILENCE_MIN}-${SILENCE_MAX} s.`}>
           <input
             type="number"
