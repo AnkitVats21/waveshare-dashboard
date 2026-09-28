@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 3023501884,
+    "hash": 1484235696,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -101,6 +101,26 @@ export const NDB_SCHEMAS = {
             "name": "barge_in",
             "type": "bool",
             "default": false
+          },
+          "13": {
+            "name": "vad_start",
+            "type": "u8",
+            "default": 1
+          },
+          "14": {
+            "name": "vad_end",
+            "type": "u8",
+            "default": 0
+          },
+          "15": {
+            "name": "vad_prefix_ms",
+            "type": "u16",
+            "default": 0
+          },
+          "16": {
+            "name": "vad_silence_ms",
+            "type": "u16",
+            "default": 0
           },
           "12": {
             "name": "web_search",
