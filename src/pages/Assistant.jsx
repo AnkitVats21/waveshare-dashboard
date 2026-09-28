@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { ASSISTANT_STATES } from './Home';
 import {
-  MEMORY_FILE, NOTES_DIR, deleteFile, getAssistantConfig, listFiles, readTextFile, saveAssistantConfig, writeTextFile,
+  MEMORY_FILE, NOTES_DIR, deleteFile, getAssistantConfig, getAssistantModels, listFiles, readTextFile, saveAssistantConfig, writeTextFile,
 } from '../lib/api';
 import { formatBytes } from '../lib/format';
 
@@ -31,6 +31,12 @@ const RESUME_MAX_LIMIT = 120;
 const KEEPALIVE_MIN = 0;
 const KEEPALIVE_MAX = 180;
 
+const SEARCH_STATUS = {
+  yes: 'Search works',
+  no: 'This model refused search; it runs without it',
+  unknown: 'Search may not work on this model (Gemini 3.x refuses it on the free tier; the device then runs without it)',
+};
+
 const formFrom = (cfg) => ({
   voice: cfg.voice || '',
   model: stripModelPrefix(cfg.model),
@@ -42,6 +48,7 @@ const formFrom = (cfg) => ({
   keepalive_s: cfg.keepalive_s ?? 60,
   echo_measure: cfg.echo_measure ?? false,
   barge_in: cfg.barge_in ?? false,
+  web_search: cfg.web_search ?? true,
 });
 
 // The Gemini config, loaded once for both tabs.
@@ -65,9 +72,35 @@ function Settings({ config, loadError, load }) {
   const [form, setForm] = useState(() => formFrom(config || {}));
   const [newKey, setNewKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [modelList, setModelList] = useState(null);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState(null);
+
   useEffect(() => { if (config) setForm(formFrom(config)); }, [config]);
 
+  useEffect(() => {
+    let active = true;
+    getAssistantModels()
+      .then((res) => {
+        if (!active) return;
+        setModelList(res?.models || []);
+        setModelsLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setModelsError(err.message);
+        setModelsLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
   const defaults = config?.defaults || {};
+  const defaultModelName = stripModelPrefix(defaults.model);
+  const activeModelName = form.model || defaultModelName;
+  const selectedModelObj = modelList?.find((m) => m.name === activeModelName || m.name === form.model);
+  const searchHint = selectedModelObj?.search ? SEARCH_STATUS[selectedModelObj.search] : null;
+  const savedModelInList = !form.model || (modelList && modelList.some((m) => m.name === form.model));
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const setValue = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -100,8 +133,9 @@ function Settings({ config, loadError, load }) {
         keepalive_s: keepalive,
         echo_measure: !!form.echo_measure,
         barge_in: !!form.barge_in,
+        web_search: !!form.web_search,
       };
-      for (const k of ['voice', 'model', 'system_prompt']) if (!body[k]) delete body[k];
+      for (const k of ['voice', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
       await saveAssistantConfig(body);
       setNewKey('');
@@ -134,18 +168,50 @@ function Settings({ config, loadError, load }) {
             ))}
           </select>
         </Field>
-        <Field label="Model" hint="Leave empty for the default. Must be a Gemini Live model.">
-          <input
-            value={form.model}
-            onChange={set('model')}
-            placeholder={stripModelPrefix(defaults.model) || 'gemini live model'}
-            spellCheck={false}
-            list="model-options"
-          />
-          <datalist id="model-options">
-            {defaults.model && <option value={stripModelPrefix(defaults.model)} />}
-          </datalist>
-        </Field>
+        {modelsError ? (
+          <Field
+            label="Model"
+            hint={`Couldn't load model list (${modelsError}). Enter a Gemini Live model name.`}
+          >
+            <input
+              value={form.model}
+              onChange={set('model')}
+              placeholder={defaultModelName || 'gemini live model'}
+              spellCheck={false}
+              list="model-options"
+            />
+            <datalist id="model-options">
+              {defaults.model && <option value={defaultModelName} />}
+            </datalist>
+          </Field>
+        ) : (
+          <Field
+            label="Model"
+            hint={
+              modelsLoading
+                ? 'Loading model list from device…'
+                : searchHint || (form.model ? 'Selected model' : `Default: ${defaultModelName || 'built-in'}`)
+            }
+          >
+            <select
+              value={form.model}
+              onChange={set('model')}
+              disabled={modelsLoading && !modelList}
+            >
+              <option value="">
+                Firmware default ({defaultModelName || 'built-in'})
+              </option>
+              {modelList?.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.display_name || m.name}
+                </option>
+              ))}
+              {!savedModelInList && form.model && (
+                <option value={form.model}>{form.model} (saved)</option>
+              )}
+            </select>
+          </Field>
+        )}
       </div>
       <Field label="Personality & instructions" hint="Sent to the assistant at the start of every conversation, e.g. tone, language, how brief to be.">
         <textarea
@@ -168,6 +234,11 @@ function Settings({ config, loadError, load }) {
           checked={form.barge_in}
           onChange={setValue('barge_in')}
           label="Barge-in: talk over a reply to interrupt it (experimental)"
+        />
+        <Switch
+          checked={form.web_search}
+          onChange={setValue('web_search')}
+          label="Google Search: let the assistant search the web for up-to-date information"
         />
         <Field label="Silence timeout (s)" hint={`For conversations started from this dashboard: how long it waits for you to speak before ending. The wake word always uses 3 s. ${SILENCE_MIN}-${SILENCE_MAX} s.`}>
           <input

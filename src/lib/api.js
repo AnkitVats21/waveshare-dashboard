@@ -227,6 +227,7 @@ export const syncTime = () => request('/api/time/sync', { method: 'POST' });
 // ── Assistant ──────────────────────────────────────────────────────────────
 
 export const getAssistantConfig = () => request('/api/config/gemini');
+export const getAssistantModels = () => request('/api/config/gemini/models');
 export const saveAssistantConfig = (config) => request('/api/config/gemini', { method: 'POST', json: config });
 // Start: a conversation as if the wake word was heard, with the longer
 // silence timeout (manual_silence_s). Stop: ends it in any state.
