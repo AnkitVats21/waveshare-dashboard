@@ -36,7 +36,7 @@ export const EMPTY_SNAPSHOT = {
 // Single WebSocket to the device control channel (/api/ws).
 //
 // The device pushes a full state snapshot on connect, after every change and
-// every ~2 s. `send(cmd, payload)` sends {"cmd": cmd, ...payload}. The device
+// every second. `send(cmd, payload)` sends {"cmd": cmd, ...payload}. The device
 // accepts one client at a time; a newer connection takes over.
 //
 // The transcript is subscribed on connect: the device sends every entry it

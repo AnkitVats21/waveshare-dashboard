@@ -3,9 +3,9 @@ import { useNexus } from '../DeviceContext';
 import { formatBytes, signalLabel } from '../lib/format';
 
 // Device health for the sidebar: CPU and free RAM over the last ~2 minutes
-// of the telemetry the device pushes every 2 s over /api/ws (no extra
+// of the telemetry the device pushes every second over /api/ws (no extra
 // requests), Wi-Fi throughput from the byte counters, and the signal as bars.
-const KEEP = 60;
+const KEEP = 120;
 const SRAM_LOW = 20 * 1024;   // below this the device is under memory pressure
 
 function Sparkline({ series, min, max, className }) {
