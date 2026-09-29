@@ -59,14 +59,14 @@ export default function Alarms() {
 
   return (
     <>
-      <PageHeader title="Alarms" subtitle="Alarms, timers and reminders. You can also ask the assistant.">
+      <PageHeader title="Alarms" subtitle="Alarms, timers, reminders and actions. You can also ask the assistant.">
         <Segmented
           value={sub}
           onChange={change}
           options={[
             { value: 'alarms', label: 'Alarms', icon: AlarmClock },
             { value: 'timers', label: 'Timers', icon: Timer, badge: timers.length || null },
-            { value: 'reminders', label: 'Reminders', icon: StickyNote, badge: pending || null },
+            { value: 'reminders', label: 'Reminders & actions', icon: StickyNote, badge: pending || null },
           ]}
         />
       </PageHeader>

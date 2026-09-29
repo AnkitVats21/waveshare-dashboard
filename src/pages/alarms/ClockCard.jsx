@@ -64,7 +64,7 @@ export default function ClockCard({ clock }) {
         <IconButton icon={Settings2} label="Clock settings" active={open} onClick={() => setOpen(!open)} />
       </div>
       {!time.valid && (
-        <Banner tone="warn" icon={TriangleAlert}>The device clock isn't set, so alarms and reminders wait. Sync it or set it from this computer.</Banner>
+        <Banner tone="warn" icon={TriangleAlert}>The device clock isn't set, so alarms, reminders and actions wait. Sync it or set it from this computer.</Banner>
       )}
       {tzMismatch && (
         <Banner tone="warn" icon={TriangleAlert}>
