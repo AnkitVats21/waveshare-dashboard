@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { AlarmClock, Plus, Trash2, Pencil, Volume2, Save, X } from 'lucide-react';
-import { Button, Card, Empty, Field, IconButton, Switch } from '../../components/ui';
+import { Button, Card, Empty, Field, IconButton, Pill, Segmented, Switch } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { deleteAlarm, getLibrary, saveAlarm, stopAlarm, testRing } from '../../lib/api';
 import { daysLabel, formatUntil, formatWhen, timeOf } from '../../lib/schedule';
@@ -16,8 +16,9 @@ const blank = () => ({
   id: 0,
   when: { time: '07:00', days: 0x7f, date: '' },
   label: '',
+  kind: 'alarm',
+  briefing_start: 'after_stop',
   tone: 'builtin:classic',
-  briefing: false,
   snooze_min: 9,
   volume: 0,
 });
@@ -26,8 +27,9 @@ const fromAlarm = (a) => ({
   id: a.id,
   when: whenFromItem(a),
   label: a.label || '',
-  tone: a.tone || 'builtin:classic',
-  briefing: !!a.briefing,
+  kind: a.kind === 'briefing' ? 'briefing' : 'alarm',
+  briefing_start: a.briefing_start === 'automatic' ? 'automatic' : 'after_stop',
+  tone: a.tone || (a.kind === 'briefing' ? '' : 'builtin:classic'),
   snooze_min: a.snooze_min || 9,
   volume: a.volume || 0,
 });
@@ -78,15 +80,16 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
     e.preventDefault();
     setBusy(true);
     try {
+      const isBriefing = form.kind === 'briefing';
       const saved = await saveAlarm({
         ...(editing ? { id: form.id } : {}),
         ...whenToFields(form.when, now),
         label: form.label.trim(),
-        tone: form.tone,
-        briefing: !!form.briefing,
+        kind: form.kind,
+        ...(isBriefing ? { briefing_start: form.briefing_start || 'after_stop' } : {}),
+        tone: isBriefing ? (form.tone.startsWith('file:') ? form.tone : '') : form.tone,
         snooze_min: Number(form.snooze_min) || 9,
         volume: Number(form.volume) || 0,
-        kind: 'alarm',
         enabled: true,
       });
       toast(saved.next_fire ? `Alarm set for ${formatWhen(saved.next_fire, now)}` : 'Alarm saved');
@@ -101,8 +104,11 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
   const preview = async () => {
     setTesting(true);
     try {
-      await testRing(form.tone, 4);
-      toast('Playing tone preview for 4 s');
+      const extra = form.kind === 'briefing'
+        ? { briefing: true, automatic: form.briefing_start === 'automatic' }
+        : {};
+      await testRing(form.tone, 4, extra);
+      toast(form.kind === 'briefing' ? 'Playing briefing preview for 4 s' : 'Playing tone preview for 4 s');
       setTimeout(async () => {
         try {
           await stopAlarm();
@@ -119,21 +125,76 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
     <Card title={editing ? 'Edit alarm' : 'New alarm'} icon={editing ? Pencil : Plus}>
       <form className="stack" onSubmit={submit}>
         <WhenFields value={form.when} onChange={(when) => set({ when })} />
+        <Field label="Alarm type">
+          <Segmented
+            value={form.kind}
+            onChange={(kind) => {
+              const newTone = kind === 'briefing'
+                ? (form.tone.startsWith('file:') ? form.tone : '')
+                : (form.tone === '' ? 'builtin:classic' : form.tone);
+              set({ kind, tone: newTone });
+            }}
+            options={[
+              { value: 'alarm', label: 'Alarm' },
+              { value: 'briefing', label: 'Briefing' },
+            ]}
+          />
+        </Field>
+        {form.kind === 'briefing' && (
+          <Field label="Briefing start">
+            <div className="stack" style={{ gap: 8, marginTop: 4 }}>
+              <label
+                className={clsx('chip-toggle', (form.briefing_start || 'after_stop') === 'after_stop' && 'is-on')}
+                style={{ justifyContent: 'flex-start', height: 'auto', padding: '10px 14px', cursor: 'pointer' }}
+              >
+                <input
+                  type="radio"
+                  name="briefing_start"
+                  value="after_stop"
+                  checked={(form.briefing_start || 'after_stop') === 'after_stop'}
+                  onChange={() => set({ briefing_start: 'after_stop' })}
+                  style={{ margin: '0 8px 0 0' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                  <strong>After I stop it</strong>
+                  <span className="muted small">Music rings until stopped, then the assistant speaks your morning briefing.</span>
+                </div>
+              </label>
+              <label
+                className={clsx('chip-toggle', form.briefing_start === 'automatic' && 'is-on')}
+                style={{ justifyContent: 'flex-start', height: 'auto', padding: '10px 14px', cursor: 'pointer' }}
+              >
+                <input
+                  type="radio"
+                  name="briefing_start"
+                  value="automatic"
+                  checked={form.briefing_start === 'automatic'}
+                  onChange={() => set({ briefing_start: 'automatic' })}
+                  style={{ margin: '0 8px 0 0' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                  <strong>Automatic</strong>
+                  <span className="muted small">Briefing starts speaking immediately at alarm time over the background music.</span>
+                </div>
+              </label>
+            </div>
+          </Field>
+        )}
         <Field label="Label">
           <input
             value={form.label}
             maxLength={64}
-            placeholder="Wake up"
+            placeholder={form.kind === 'briefing' ? 'Morning briefing' : 'Wake up'}
             onChange={(e) => set({ label: e.target.value })}
           />
         </Field>
         <Field
-          label="Tone"
+          label={form.kind === 'briefing' ? 'Music' : 'Tone'}
           action={
             <IconButton
               type="button"
               icon={Volume2}
-              label="Preview tone (rings for 4 s)"
+              label={`Preview ${form.kind === 'briefing' ? 'music' : 'tone'} (rings for 4 s)`}
               onClick={preview}
               disabled={testing}
             />
@@ -144,16 +205,7 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
             onChange={(tone) => set({ tone })}
             songs={songs}
             onRefreshLibrary={onRefreshSongs}
-          />
-        </Field>
-        <Field
-          label="Morning briefing"
-          hint="After you stop the alarm, the assistant gives a short briefing: weather, today's schedule, headlines. Customize it with a note called briefing."
-        >
-          <Switch
-            checked={!!form.briefing}
-            onChange={(briefing) => set({ briefing })}
-            label="Brief after stopping alarm"
+            isBriefing={form.kind === 'briefing'}
           />
         </Field>
         <div className="two-fields">
@@ -200,11 +252,16 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
 }
 
 function AlarmRow({ alarm, songs, now, active, onEdit, onToggle, onDelete }) {
+  const isBriefing = alarm.kind === 'briefing';
+  const musicOrTone = formatTone(alarm.tone, songs, alarm.kind);
+  const badge = isBriefing
+    ? (alarm.briefing_start === 'automatic' ? 'Briefing · auto' : 'Briefing')
+    : null;
+
   const details = [
     alarm.at ? formatWhen(alarm.at, now).replace(/ \d\d:\d\d$/, '') : daysLabel(alarm.days),
     alarm.label,
-    formatTone(alarm.tone, songs),
-    alarm.briefing ? 'Morning briefing' : null,
+    musicOrTone,
   ].filter(Boolean);
   let next = 'Off';
   if (alarm.enabled) {
@@ -215,7 +272,10 @@ function AlarmRow({ alarm, songs, now, active, onEdit, onToggle, onDelete }) {
   return (
     <div className={clsx('alarm', !alarm.enabled && 'is-off', active && 'is-selected')}>
       <div className="alarm-main">
-        <span className="alarm-time mono">{timeOf(alarm)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="alarm-time mono">{timeOf(alarm)}</span>
+          {badge && <Pill tone="accent">{badge}</Pill>}
+        </div>
         <span className="small ellipsis">{details.join(' · ')}</span>
         <span className="muted small">{next}</span>
       </div>

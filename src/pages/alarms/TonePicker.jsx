@@ -48,7 +48,12 @@ export function getToneSource(tone) {
   return 'library';
 }
 
-export function formatTone(tone, songs) {
+export function formatTone(tone, songs, kind) {
+  if (kind === 'briefing') {
+    if (!tone) return 'Briefing music';
+    if (tone.startsWith('file:')) return tone.slice('file:'.length);
+    return 'Briefing music';
+  }
   if (!tone || tone === 'builtin' || tone === 'builtin:classic') return 'Classic';
   if (tone.startsWith('builtin:')) {
     const name = tone.slice('builtin:'.length);
@@ -61,7 +66,7 @@ export function formatTone(tone, songs) {
   return s ? s.title : `Song (${tone})`;
 }
 
-export function TonePicker({ value, onChange, songs, onRefreshLibrary }) {
+export function TonePicker({ value, onChange, songs, onRefreshLibrary, isBriefing = false }) {
   const toast = useToast();
   const fileInputRef = useRef(null);
 
@@ -167,7 +172,7 @@ export function TonePicker({ value, onChange, songs, onRefreshLibrary }) {
     }
   };
 
-  const currentFileName = value.startsWith('file:') ? value.slice('file:'.length) : '';
+  const currentFileName = value && value.startsWith('file:') ? value.slice('file:'.length) : '';
 
   const handleDeleteFile = async () => {
     if (!currentFileName) return;
@@ -177,7 +182,7 @@ export function TonePicker({ value, onChange, songs, onRefreshLibrary }) {
       await deleteToneFile(currentFileName);
       toast(`Deleted ${currentFileName}`);
       await refreshTones();
-      onChange('builtin:classic');
+      onChange(isBriefing ? '' : 'builtin:classic');
     } catch (err) {
       toast(`Delete failed: ${err.message}`, 'error');
     } finally {
@@ -222,6 +227,58 @@ export function TonePicker({ value, onChange, songs, onRefreshLibrary }) {
       toast(`Download failed: ${err.message}`, 'error');
     }
   };
+
+  if (isBriefing) {
+    const currentBriefingTone = value && value.startsWith('file:') ? value.slice(5) : '';
+    return (
+      <div className="tone-picker stack" style={{ gap: 8 }}>
+        <div className="inline-field">
+          <select
+            value={value && value.startsWith('file:') ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            <option value="">Briefing music (default)</option>
+            {tonesData.files.map((file) => (
+              <option key={file.name} value={`file:${file.name}`}>
+                {file.name} ({formatBytes(file.bytes)})
+              </option>
+            ))}
+          </select>
+          {value && value.startsWith('file:') && (
+            <IconButton
+              type="button"
+              icon={Trash2}
+              label={`Delete ${currentBriefingTone}`}
+              danger
+              disabled={deleting}
+              onClick={handleDeleteFile}
+            />
+          )}
+        </div>
+        <div className="inline-row" style={{ alignItems: 'center', gap: 8 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".ogg,.opus,.webm"
+            style={{ display: 'none' }}
+            onChange={handleFileUpload}
+          />
+          <Button
+            type="button"
+            icon={Upload}
+            size="sm"
+            busy={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload audio
+          </Button>
+          <span className="muted small">
+            {value && value.startsWith('file:') ? 'Custom tone selected' : 'Uses global briefing music'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // Determine current builtin pattern
   let currentBuiltin = 'classic';
