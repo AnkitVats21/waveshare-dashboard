@@ -3,30 +3,42 @@ import clsx from 'clsx';
 import { AlarmClock, Plus, Trash2, Pencil, Volume2, Save, X } from 'lucide-react';
 import { Button, Card, Empty, Field, IconButton, Switch } from '../../components/ui';
 import { useToast } from '../../components/Toast';
-import { deleteAlarm, getLibrary, saveAlarm, testRing } from '../../lib/api';
+import { deleteAlarm, getLibrary, saveAlarm, stopAlarm, testRing } from '../../lib/api';
 import { daysLabel, formatUntil, formatWhen, timeOf } from '../../lib/schedule';
 import { needsResolution, resolveTrackInfo } from '../../lib/trackMetadata';
 import { WhenFields, whenFromItem, whenToFields } from './WhenFields';
+import { TonePicker, formatTone } from './TonePicker';
 
 const DEFAULT_VOLUME = 60;   // AlarmService::MIN_VOLUME: the floor when volume is 0
 
-const blank = () => ({ id: 0, when: { time: '07:00', days: 0x7f, date: '' }, label: '', tone: '', snooze_min: 9, volume: 0 });
+const blank = () => ({
+  id: 0,
+  when: { time: '07:00', days: 0x7f, date: '' },
+  label: '',
+  tone: 'builtin:classic',
+  briefing: false,
+  snooze_min: 9,
+  volume: 0,
+});
 
 const fromAlarm = (a) => ({
   id: a.id,
   when: whenFromItem(a),
   label: a.label || '',
-  tone: a.tone || '',
+  tone: a.tone || 'builtin:classic',
+  briefing: !!a.briefing,
   snooze_min: a.snooze_min || 9,
   volume: a.volume || 0,
 });
 
 const byTitle = (a, b) => a.title.localeCompare(b.title);
 
-// Library songs saved on the card; only those can ring offline. Songs the
-// catalog knows only by id get their names looked up, as in the library.
+// Library songs saved on the card; only those can ring offline.
 function useTones() {
   const [songs, setSongs] = useState([]);
+  const [nonce, setNonce] = useState(0);
+  const refresh = () => setNonce((n) => n + 1);
+
   useEffect(() => {
     let cancelled = false;
     getLibrary()
@@ -34,35 +46,25 @@ function useTones() {
         const saved = all.filter((t) => t.cached);
         if (cancelled) return;
         setSongs([...saved].sort(byTitle));
-        const named = await Promise.all(saved.map(async (t) => {
-          if (!needsResolution(t)) return t;
-          const info = await resolveTrackInfo(t.id);
-          return info ? { ...t, ...info } : { ...t, artist: '' };
-        }));
+        const named = await Promise.all(
+          saved.map(async (t) => {
+            if (!needsResolution(t)) return t;
+            const info = await resolveTrackInfo(t.id);
+            return info ? { ...t, ...info } : { ...t, artist: '' };
+          })
+        );
         if (!cancelled) setSongs(named.sort(byTitle));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
-  return songs;
+  }, [nonce]);
+
+  return { songs, refreshSongs: refresh };
 }
 
-function ToneSelect({ songs, value, onChange }) {
-  const known = !value || songs.some((s) => s.id === value);
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Built-in tone</option>
-      {!known && <option value={value}>Unknown song ({value})</option>}
-      {songs.map((s) => (
-        <option key={s.id} value={s.id}>{s.artist ? `${s.title} · ${s.artist}` : s.title}</option>
-      ))}
-    </select>
-  );
-}
-
-function AlarmForm({ initial, songs, now, onSaved, onCancel }) {
+function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
   const toast = useToast();
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -80,6 +82,7 @@ function AlarmForm({ initial, songs, now, onSaved, onCancel }) {
         ...whenToFields(form.when, now),
         label: form.label.trim(),
         tone: form.tone,
+        briefing: !!form.briefing,
         snooze_min: Number(form.snooze_min) || 9,
         volume: Number(form.volume) || 0,
         kind: 'alarm',
@@ -94,14 +97,19 @@ function AlarmForm({ initial, songs, now, onSaved, onCancel }) {
     }
   };
 
-  const test = async () => {
+  const preview = async () => {
     setTesting(true);
     try {
-      await testRing(form.tone, 15);
-      toast('Ringing for 15 s. Stop it from the banner or a key.');
+      await testRing(form.tone, 4);
+      toast('Playing tone preview for 4 s');
+      setTimeout(async () => {
+        try {
+          await stopAlarm();
+        } catch {}
+        setTesting(false);
+      }, 4000);
     } catch (err) {
-      toast(`Couldn't ring: ${err.message}`, 'error');
-    } finally {
+      toast(`Couldn't play preview: ${err.message}`, 'error');
       setTesting(false);
     }
   };
@@ -111,25 +119,79 @@ function AlarmForm({ initial, songs, now, onSaved, onCancel }) {
       <form className="stack" onSubmit={submit}>
         <WhenFields value={form.when} onChange={(when) => set({ when })} />
         <Field label="Label">
-          <input value={form.label} maxLength={64} placeholder="Wake up" onChange={(e) => set({ label: e.target.value })} />
+          <input
+            value={form.label}
+            maxLength={64}
+            placeholder="Wake up"
+            onChange={(e) => set({ label: e.target.value })}
+          />
         </Field>
-        <Field label="Tone" hint={songs.length ? 'Songs saved on the SD card. The built-in tone plays if a song fails.' : 'Save songs to the library to use them as tones.'}>
-          <div className="inline-field">
-            <ToneSelect songs={songs} value={form.tone} onChange={(tone) => set({ tone })} />
-            <IconButton icon={Volume2} label="Try this tone (rings for 15 s)" onClick={test} disabled={testing} />
-          </div>
+        <Field
+          label="Tone"
+          action={
+            <IconButton
+              type="button"
+              icon={Volume2}
+              label="Preview tone (rings for 4 s)"
+              onClick={preview}
+              disabled={testing}
+            />
+          }
+        >
+          <TonePicker
+            value={form.tone}
+            onChange={(tone) => set({ tone })}
+            songs={songs}
+            onRefreshLibrary={onRefreshSongs}
+          />
+        </Field>
+        <Field
+          label="Morning briefing"
+          hint="After you stop the alarm, the assistant gives a short briefing: weather, today's schedule, headlines. Customize it with a note called briefing."
+        >
+          <Switch
+            checked={!!form.briefing}
+            onChange={(briefing) => set({ briefing })}
+            label="Brief after stopping alarm"
+          />
         </Field>
         <div className="two-fields">
           <Field label="Snooze (min)">
-            <input type="number" min={1} max={60} value={form.snooze_min} onChange={(e) => set({ snooze_min: e.target.value })} />
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={form.snooze_min}
+              onChange={(e) => set({ snooze_min: e.target.value })}
+            />
           </Field>
-          <Field label="Volume" hint={Number(form.volume) ? `at least ${form.volume}%` : `default, at least ${DEFAULT_VOLUME}%`}>
-            <input type="range" min={0} max={100} step={5} value={form.volume} onChange={(e) => set({ volume: e.target.value })} />
+          <Field
+            label="Volume"
+            hint={
+              Number(form.volume)
+                ? `at least ${form.volume}%`
+                : `default, at least ${DEFAULT_VOLUME}%`
+            }
+          >
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={form.volume}
+              onChange={(e) => set({ volume: e.target.value })}
+            />
           </Field>
         </div>
         <div className="form-actions">
-          <Button type="submit" variant="primary" icon={editing ? Save : Plus} busy={busy}>{editing ? 'Save' : 'Add alarm'}</Button>
-          {editing && <Button type="button" icon={X} onClick={onCancel}>Cancel</Button>}
+          <Button type="submit" variant="primary" icon={editing ? Save : Plus} busy={busy}>
+            {editing ? 'Save' : 'Add alarm'}
+          </Button>
+          {editing && (
+            <Button type="button" icon={X} onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
         </div>
       </form>
     </Card>
@@ -137,14 +199,18 @@ function AlarmForm({ initial, songs, now, onSaved, onCancel }) {
 }
 
 function AlarmRow({ alarm, songs, now, active, onEdit, onToggle, onDelete }) {
-  const song = songs.find((s) => s.id === alarm.tone);
   const details = [
     alarm.at ? formatWhen(alarm.at, now).replace(/ \d\d:\d\d$/, '') : daysLabel(alarm.days),
     alarm.label,
-    alarm.tone ? song?.title || 'Song' : 'Built-in tone',
+    formatTone(alarm.tone, songs),
+    alarm.briefing ? 'Morning briefing' : null,
   ].filter(Boolean);
   let next = 'Off';
-  if (alarm.enabled) next = alarm.next_fire ? `${formatWhen(alarm.next_fire, now)} · ${formatUntil(alarm.next_fire - now)}` : 'Already passed';
+  if (alarm.enabled) {
+    next = alarm.next_fire
+      ? `${formatWhen(alarm.next_fire, now)} · ${formatUntil(alarm.next_fire - now)}`
+      : 'Already passed';
+  }
   return (
     <div className={clsx('alarm', !alarm.enabled && 'is-off', active && 'is-selected')}>
       <div className="alarm-main">
@@ -163,7 +229,7 @@ function AlarmRow({ alarm, songs, now, active, onEdit, onToggle, onDelete }) {
 
 export default function AlarmsView({ alarms, now, reload }) {
   const toast = useToast();
-  const songs = useTones();
+  const { songs, refreshSongs } = useTones();
   const [editing, setEditing] = useState(null);
   const initial = useMemo(() => (editing ? fromAlarm(editing) : blank()), [editing]);
   const list = (alarms || []).filter((a) => a.kind !== 'timer');
@@ -192,6 +258,7 @@ export default function AlarmsView({ alarms, now, reload }) {
       <AlarmForm
         initial={initial}
         songs={songs}
+        onRefreshSongs={refreshSongs}
         now={now}
         onSaved={() => {
           setEditing(null);
@@ -203,11 +270,22 @@ export default function AlarmsView({ alarms, now, reload }) {
         {alarms === null ? (
           <div className="loading" />
         ) : list.length === 0 ? (
-          <Empty icon={AlarmClock} title="No alarms">Add one here or say "wake me up at 7 on weekdays".</Empty>
+          <Empty icon={AlarmClock} title="No alarms">
+            Add one here or say "wake me up at 7 on weekdays".
+          </Empty>
         ) : (
           <div className="rows">
             {list.map((a) => (
-              <AlarmRow key={a.id} alarm={a} songs={songs} now={now} active={editing?.id === a.id} onEdit={setEditing} onToggle={toggle} onDelete={remove} />
+              <AlarmRow
+                key={a.id}
+                alarm={a}
+                songs={songs}
+                now={now}
+                active={editing?.id === a.id}
+                onEdit={setEditing}
+                onToggle={toggle}
+                onDelete={remove}
+              />
             ))}
           </div>
         )}

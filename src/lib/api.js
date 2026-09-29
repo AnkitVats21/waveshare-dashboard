@@ -209,9 +209,19 @@ export const deleteAlarm = (id) => request(`/api/alarms?${q({ id })}`, { method:
 export const getAlarmStatus = () => request('/api/alarms/status');
 export const stopAlarm = () => request('/api/alarms/stop', { method: 'POST' });
 export const snoozeAlarm = () => request('/api/alarms/snooze', { method: 'POST' });
-// Rings now for up to limitS seconds; tone is a library song id, '' = built-in.
+// Rings now for up to limitS seconds; tone setting string, '' = built-in.
 export const testRing = (tone, limitS = 20) =>
   request('/api/alarms/ring', { method: 'POST', json: { tone, ring_limit_s: limitS } });
+export const getAlarmTones = () => request('/api/alarms/tones');
+export const uploadToneFile = (name, file) =>
+  request(`/api/files/upload?${q({ path: `/sdcard/media/alarm/${name}` })}`, {
+    method: 'POST',
+    body: file,
+  });
+export const deleteToneFile = (name) => deleteFile(`/sdcard/media/alarm/${name}`);
+export const startYouTubeTone = ({ id, title, artist }) =>
+  request('/api/alarms/tones/youtube', { method: 'POST', json: { id, title, artist } });
+export const getYouTubeToneStatus = () => request('/api/alarms/tones/youtube');
 
 export const getReminders = () => request('/api/reminders');
 export const saveReminder = (reminder) => request('/api/reminders', { method: 'POST', json: reminder });
