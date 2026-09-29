@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 1484235696,
+    "hash": 1310229165,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -122,10 +122,25 @@ export const NDB_SCHEMAS = {
             "type": "u16",
             "default": 0
           },
+          "17": {
+            "name": "weather_location",
+            "type": "string",
+            "default": ""
+          },
           "12": {
             "name": "web_search",
             "type": "bool",
             "default": true
+          },
+          "18": {
+            "name": "mcp_url",
+            "type": "string",
+            "default": ""
+          },
+          "19": {
+            "name": "mcp_max_tools",
+            "type": "u8",
+            "default": 32
           }
         }
       },
@@ -272,6 +287,11 @@ export const NDB_SCHEMAS = {
             "name": "created",
             "type": "u32",
             "default": 0
+          },
+          "10": {
+            "name": "action",
+            "type": "bool",
+            "default": false
           }
         }
       }
