@@ -502,6 +502,13 @@ textarea { resize: vertical; line-height: 1.5; }
 
 /* ── Other pages ───────────────────────────────────────────────────────── */
 
+.save-bar {
+  position: sticky; bottom: 12px; z-index: 5; margin-top: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--accent); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.save-bar .small { display: inline-flex; align-items: center; gap: 6px; }
 .assistant-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .note .row { cursor: default; }
 

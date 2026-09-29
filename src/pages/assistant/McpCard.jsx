@@ -87,7 +87,7 @@ export default function McpCard() {
       }
     >
       <p className="muted small" style={{ marginBottom: 12 }}>
-        Connect to a Model Context Protocol (MCP) server over SSE to dynamically provide remote skills (e.g. news, web search, weather) without flashing firmware.
+        Skills from a Model Context Protocol (MCP) server (e.g. news, web search, weather): new ones need no firmware flash.
       </p>
 
       {status?.last_error && (
