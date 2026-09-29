@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Sparkles, Brain, StickyNote, KeyRound, AlertTriangle, Save, Trash2, ChevronDown, FileText, Info, MessagesSquare, Settings2 } from 'lucide-react';
 import { Banner, Button, Card, Empty, Field, IconButton, PageHeader, Pill, Segmented, Switch } from '../components/ui';
 import Conversation from './assistant/Conversation';
+import McpCard from './assistant/McpCard';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { ASSISTANT_STATES } from './Home';
@@ -563,6 +564,7 @@ export default function Assistant() {
         <div className="assistant-grid">
           <Settings {...cfg} />
           <div className="stack">
+            <McpCard />
             <Memory />
             <Notes />
           </div>

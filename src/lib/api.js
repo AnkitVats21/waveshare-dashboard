@@ -239,6 +239,16 @@ export const syncTime = () => request('/api/time/sync', { method: 'POST' });
 export const getAssistantConfig = () => request('/api/config/gemini');
 export const getAssistantModels = () => request('/api/config/gemini/models');
 export const saveAssistantConfig = (config) => request('/api/config/gemini', { method: 'POST', json: config });
+// MCP (Model Context Protocol) remote skills
+export const getMcpStatus = () => request('/api/mcp');
+export const saveMcpConfig = ({ url, max_tools, token }) => {
+  const json = {};
+  if (url !== undefined) json.url = url;
+  if (max_tools !== undefined) json.max_tools = Number(max_tools);
+  if (token !== undefined && token !== '') json.token = token;
+  return request('/api/mcp', { method: 'POST', json });
+};
+export const refreshMcpTools = () => request('/api/mcp/refresh', { method: 'POST' });
 // Start: a conversation as if the wake word was heard, with the longer
 // silence timeout (manual_silence_s). Stop: ends it in any state.
 export const startConversation = () => request('/api/assistant/start', { method: 'POST' });
