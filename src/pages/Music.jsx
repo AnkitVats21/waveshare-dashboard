@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import {
-  Search, HardDrive, ListMusic, Play, ListPlus, ListStart, Loader2, RefreshCw, Trash2, X, Shuffle, Music2, HardDriveDownload,
+  Search, HardDrive, ListMusic, Play, ListPlus, ListStart, Loader2, RefreshCw, Trash2, X, Shuffle, Music2, HardDriveDownload, Sparkles,
 } from 'lucide-react';
 import { Button, Card, Empty, IconButton, PageHeader, Segmented, Switch } from '../components/ui';
 import { TrackArt, useTrackInfo } from '../components/Track';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
-import { deleteFromLibrary, getLibrary, playLocal, scanLibrary, searchYouTube } from '../lib/api';
+import { deleteFromLibrary, getLibrary, getMix, playLocal, scanLibrary, searchYouTube } from '../lib/api';
 import { needsResolution, resolveTrackInfo } from '../lib/trackMetadata';
 import { formatBytes, formatSeconds } from '../lib/format';
 
@@ -22,20 +22,199 @@ const QUICK_PICKS = [
 
 const subFromHash = () => {
   const sub = window.location.hash.replace(/^#\/?/, '').split('/')[1];
-  return ['search', 'library', 'queue'].includes(sub) ? sub : 'search';
+  return ['foryou', 'search', 'library', 'queue'].includes(sub) ? sub : 'foryou';
 };
+
+// One song as a card: play, and with something playing, queue it.
+// track: {id, title, artist, duration}.
+function TrackCard({ track, onPlay, starting }) {
+  const { online, queueTrack, snapshot } = useNexus();
+  const toast = useToast();
+  const somethingPlaying = snapshot.music.state !== 'IDLE';
+  const enqueue = (front) => {
+    queueTrack(track, front);
+    toast(front ? `"${track.title}" plays next` : `Added "${track.title}" to the queue`);
+  };
+  return (
+    <article className="result">
+      <div className="result-art">
+        <TrackArt id={track.id} size="fill" />
+        {track.duration > 0 && <span className="result-duration mono">{formatSeconds(track.duration)}</span>}
+        <button className="result-play" onClick={() => onPlay(track)} disabled={!online || starting} aria-label={`Play ${track.title}`}>
+          {starting ? <Loader2 size={22} className="spin" /> : <Play size={22} fill="currentColor" />}
+        </button>
+      </div>
+      <div className="result-body">
+        <h3 className="result-title" title={track.title}>{track.title}</h3>
+        <p className="result-artist">{track.artist}</p>
+      </div>
+      {somethingPlaying && (
+        <div className="result-actions">
+          <IconButton icon={ListStart} label="Play next" size={16} disabled={!online} onClick={() => enqueue(true)} />
+          <IconButton icon={ListPlus} label="Add to queue" size={16} disabled={!online} onClick={() => enqueue(false)} />
+        </div>
+      )}
+    </article>
+  );
+}
+
+// ── For you ───────────────────────────────────────────────────────────────
+
+const MIX_SEEDS = 3;
+const SEED_MAX_S = 15 * 60;   // long tracks (podcasts, 1 h mixes) make poor seeds
+const MIX_TTL_MS = 6 * 3600 * 1000;   // a mix takes ~10 s to fetch; keep it a while
+
+function cachedMix(id) {
+  try {
+    const c = JSON.parse(localStorage.getItem(`nexus_mix_${id}`) || 'null');
+    return c && Date.now() - c.at < MIX_TTL_MS ? c.tracks : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeMix(id, tracks) {
+  try {
+    localStorage.setItem(`nexus_mix_${id}`, JSON.stringify({ at: Date.now(), tracks }));
+  } catch {
+    // Not cached.
+  }
+}
+
+function Shelf({ title, note, tracks, onPlay, startingId, loading }) {
+  return (
+    <section>
+      <div className="shelf-head">
+        <h2>{title}</h2>
+        {note && <span className="muted small">{note}</span>}
+      </div>
+      {loading ? (
+        <div className="loading"><Loader2 className="spin" /></div>
+      ) : (
+        <div className="shelf">
+          {tracks.map((t) => <TrackCard key={t.id} track={t} onPlay={onPlay} starting={startingId === t.id} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// A feed from the device's own history: recently and most played songs from
+// the library, and YouTube mixes seeded by the latest songs (different
+// artists). No account and nothing leaves the browser but the mix requests.
+function ForYouView() {
+  const { setOptimisticTrack, playTrack } = useNexus();
+  const toast = useToast();
+  const [library, setLibrary] = useState(null);
+  const [mixes, setMixes] = useState([]);   // [{seed, tracks|null}]
+  const [startingId, setStartingId] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getLibrary('')
+      .then((list) => {
+        if (!active) return;
+        setLibrary(list);
+        // Songs saved without metadata show their id; look them up (cached).
+        const byRecent = [...list].filter((x) => x.last_played_at).sort((a, b) => b.last_played_at - a.last_played_at);
+        const byCount = [...list].filter((x) => x.play_count > 1).sort((a, b) => b.play_count - a.play_count);
+        new Set([...byRecent.slice(0, 12), ...byCount.slice(0, 12)]).forEach(async (t) => {
+          if (!needsResolution(t)) return;
+          const meta = await resolveTrackInfo(t.id);
+          if (meta && active) setLibrary((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...meta } : x)));
+        });
+        const seeds = [];
+        const artists = new Set();
+        for (const t of byRecent) {
+          if (t.duration > SEED_MAX_S) continue;
+          // Unknown artists don't count as the same artist.
+          const a = needsResolution(t) ? t.id : (t.artist || t.id).toLowerCase();
+          if (artists.has(a)) continue;
+          artists.add(a);
+          seeds.push(t);
+          if (seeds.length === MIX_SEEDS) break;
+        }
+        setMixes(seeds.map((seed) => ({ seed, tracks: cachedMix(seed.id) })));
+        seeds.forEach(async (seed) => {
+          if (cachedMix(seed.id)) return;
+          try {
+            const tracks = (await getMix(seed.id)).map((v) => ({
+              id: v.videoId, title: v.title, artist: v.author, duration: v.lengthSeconds,
+            }));
+            storeMix(seed.id, tracks);
+            if (active) setMixes((m) => m.map((x) => (x.seed.id === seed.id ? { ...x, tracks } : x)));
+          } catch {
+            if (active) setMixes((m) => m.map((x) => (x.seed.id === seed.id ? { ...x, tracks: [] } : x)));
+          }
+        });
+      })
+      .catch((err) => {
+        if (active) setLibrary([]);
+        toast(`Couldn't load the library: ${err.message}`, 'error');
+      });
+    return () => { active = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inLibrary = (id) => library?.find((t) => t.id === id);
+  const play = async (track) => {
+    const saved = inLibrary(track.id);
+    if (saved?.cached) {
+      try {
+        await playLocal(track.id);
+        setOptimisticTrack(track);
+      } catch (err) {
+        toast(`Playback failed: ${err.message}`, 'error');
+      }
+      return;
+    }
+    setStartingId(track.id);
+    try {
+      await playTrack(track);
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  if (library === null) return <div className="loading"><Loader2 className="spin" /></div>;
+  const asTrack = (t) => ({ id: t.id, title: t.title, artist: t.artist, duration: t.duration });
+  const recent = library.filter((t) => t.last_played_at).sort((a, b) => b.last_played_at - a.last_played_at).slice(0, 12).map(asTrack);
+  const most = library.filter((t) => t.play_count > 1).sort((a, b) => b.play_count - a.play_count).slice(0, 12).map(asTrack);
+  if (recent.length === 0) {
+    return (
+      <Empty icon={Sparkles} title="Nothing here yet">
+        Play a few songs; this page then shows what you played and mixes based on it.
+      </Empty>
+    );
+  }
+  const shared = { onPlay: play, startingId };
+  return (
+    <div className="stack" style={{ gap: 22 }}>
+      <Shelf title="Recently played" tracks={recent} {...shared} />
+      {mixes.map(({ seed, tracks }) => (tracks === null || tracks.length > 0) && (
+        <Shelf
+          key={seed.id}
+          title={`Because you played ${inLibrary(seed.id)?.title || seed.title}`}
+          note="YouTube mix"
+          tracks={tracks || []}
+          loading={tracks === null}
+          {...shared}
+        />
+      ))}
+      {most.length > 0 && <Shelf title="Most played" tracks={most} {...shared} />}
+    </div>
+  );
+}
 
 // ── Search ────────────────────────────────────────────────────────────────
 
 function SearchView() {
-  const { online, playTrack, queueTrack, snapshot } = useNexus();
+  const { playTrack } = useNexus();
   const toast = useToast();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [startingId, setStartingId] = useState(null);
   const [searched, setSearched] = useState(false);
-  const somethingPlaying = snapshot.music.state !== 'IDLE';
 
   const search = async (term = query) => {
     const q = term.trim();
@@ -54,18 +233,13 @@ function SearchView() {
 
   const toTrack = (r) => ({ id: r.videoId, title: r.title, artist: r.author, duration: r.lengthSeconds });
 
-  const play = async (r) => {
-    setStartingId(r.videoId);
+  const play = async (track) => {
+    setStartingId(track.id);
     try {
-      await playTrack(toTrack(r));
+      await playTrack(track);
     } finally {
       setStartingId(null);
     }
-  };
-
-  const enqueue = (r, front) => {
-    queueTrack(toTrack(r), front);
-    toast(front ? `"${r.title}" plays next` : `Added "${r.title}" to the queue`);
   };
 
   return (
@@ -84,25 +258,7 @@ function SearchView() {
       {results.length > 0 ? (
         <div className="results">
           {results.map((r) => (
-            <article key={r.videoId} className="result">
-              <div className="result-art">
-                <TrackArt id={r.videoId} size="fill" />
-                <span className="result-duration mono">{formatSeconds(r.lengthSeconds)}</span>
-                <button className="result-play" onClick={() => play(r)} disabled={!online || startingId === r.videoId} aria-label={`Play ${r.title}`}>
-                  {startingId === r.videoId ? <Loader2 size={22} className="spin" /> : <Play size={22} fill="currentColor" />}
-                </button>
-              </div>
-              <div className="result-body">
-                <h3 className="result-title" title={r.title}>{r.title}</h3>
-                <p className="result-artist">{r.author}</p>
-              </div>
-              {somethingPlaying && (
-                <div className="result-actions">
-                  <IconButton icon={ListStart} label="Play next" size={16} disabled={!online} onClick={() => enqueue(r, true)} />
-                  <IconButton icon={ListPlus} label="Add to queue" size={16} disabled={!online} onClick={() => enqueue(r, false)} />
-                </div>
-              )}
-            </article>
+            <TrackCard key={r.videoId} track={toTrack(r)} onPlay={play} starting={startingId === r.videoId} />
           ))}
         </div>
       ) : (
@@ -343,12 +499,14 @@ export default function Music() {
           value={sub}
           onChange={change}
           options={[
+            { value: 'foryou', label: 'For you', icon: Sparkles },
             { value: 'search', label: 'Search', icon: Search },
             { value: 'library', label: 'Library', icon: HardDrive, badge: libraryCount || null },
             { value: 'queue', label: 'Queue', icon: ListMusic, badge: snapshot.music.queue_length || null },
           ]}
         />
       </PageHeader>
+      {sub === 'foryou' && <ForYouView />}
       <div className={clsx('stack', sub !== 'search' && 'hidden')}><SearchView /></div>
       {sub === 'library' && <LibraryView onCount={setLibraryCount} />}
       {sub === 'queue' && <QueueView />}

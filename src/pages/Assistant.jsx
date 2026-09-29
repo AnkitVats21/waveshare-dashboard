@@ -501,8 +501,11 @@ export default function Assistant() {
 
   return (
     <>
-      <PageHeader title="Assistant" subtitle="Talk to it from here, and set how it sounds, what it can do and what it remembers.">
-        <Pill tone={st.tone} pulse={snapshot.assistant.state !== 'idle'}>{st.label}</Pill>
+      <PageHeader
+        title="Assistant"
+        subtitle="Talk to it from here, and set how it sounds, what it can do and what it remembers."
+        status={<Pill tone={st.tone} pulse={snapshot.assistant.state !== 'idle'}>{st.label}</Pill>}
+      >
         <Segmented
           value={sub}
           onChange={change}

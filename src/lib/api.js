@@ -76,6 +76,14 @@ export async function searchYouTube(query) {
   return res.json();
 }
 
+// A YouTube mix (radio) seeded by one song: [{videoId, title, author,
+// lengthSeconds}]. The resolver runs yt-dlp for it, ~10 s.
+export async function getMix(videoId) {
+  const res = await fetch(`${STREAM_API_BASE}/mixes/RD${encodeURIComponent(videoId)}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return ((await res.json()).videos || []).filter((v) => v.videoId && v.videoId !== videoId);
+}
+
 export async function resolveStreamUrl(videoId) {
   const res = await fetch(`${STREAM_API_BASE}/videos/${encodeURIComponent(videoId)}`);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);

@@ -4,6 +4,7 @@ import { Home as HomeIcon, Music2, Sparkles, AlarmClock, Mic, SlidersHorizontal,
 import { useNexus } from './DeviceContext';
 import PlayerBar from './components/PlayerBar';
 import AlarmRinging from './components/AlarmRinging';
+import HealthPanel from './components/HealthPanel';
 import Home from './pages/Home';
 import Music from './pages/Music';
 import Assistant from './pages/Assistant';
@@ -109,6 +110,7 @@ export default function App() {
             </a>
           ))}
         </nav>
+        <HealthPanel />
         <div className="sidebar-footer">
           <ConnectionBadge />
           <button className="icon-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}>

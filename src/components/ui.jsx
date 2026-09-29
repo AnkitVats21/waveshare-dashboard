@@ -20,11 +20,14 @@ export function Card({ title, icon: Icon, action, className, children, padded = 
   );
 }
 
-export function PageHeader({ title, subtitle, children }) {
+export function PageHeader({ title, subtitle, status, children }) {
   return (
     <div className="page-header">
       <div>
-        <h1>{title}</h1>
+        <div className="page-title-row">
+          <h1>{title}</h1>
+          {status}
+        </div>
         {subtitle && <p className="page-subtitle">{subtitle}</p>}
       </div>
       {children && <div className="page-header-actions">{children}</div>}
