@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { BellRing, Check, Pencil, Plus, Save, StickyNote, Trash2, X } from 'lucide-react';
-import { Button, Card, Empty, Field, IconButton, Pill, Segmented, Switch } from '../../components/ui';
+import { BellRing, Check, Pencil, Plus, Save, StickyNote, Trash2, X, Zap } from 'lucide-react';
+import { Button, Card, Empty, Field, IconButton, Pill, Switch } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { ackReminder, deleteReminder, saveReminder } from '../../lib/api';
 import { daysLabel, formatUntil, formatWhen, timeOf } from '../../lib/schedule';
@@ -9,7 +9,7 @@ import { WhenFields, whenFromItem, whenToFields } from './WhenFields';
 
 const MAX_TEXT = 200;   // AlarmService::MAX_REMINDER_TEXT
 
-const blank = () => ({ id: 0, text: '', action: false, when: { time: '09:00', days: 0, date: '' } });
+const blank = (action) => ({ id: 0, text: '', action, when: { time: '09:00', days: 0, date: '' } });
 
 function ReminderForm({ initial, now, onSaved, onCancel }) {
   const toast = useToast();
@@ -46,16 +46,6 @@ function ReminderForm({ initial, now, onSaved, onCancel }) {
       icon={editing ? Pencil : Plus}
     >
       <form className="stack" onSubmit={submit}>
-        <Field label="Type">
-          <Segmented
-            value={isAction ? 'action' : 'reminder'}
-            onChange={(val) => setForm({ ...form, action: val === 'action' })}
-            options={[
-              { value: 'reminder', label: 'Reminder' },
-              { value: 'action', label: 'Action' },
-            ]}
-          />
-        </Field>
         <Field
           label={isAction ? 'Instruction' : 'Remind me to'}
           hint={`${form.text.length}/${MAX_TEXT}. ${isAction ? 'The assistant carries out the instruction when due.' : "The assistant says it when it's due."}`}
@@ -95,7 +85,6 @@ function ReminderRow({ reminder: r, now, active, onEdit, onToggle, onDelete, onA
     <div className={clsx('alarm', !r.enabled && !r.pending && 'is-off', active && 'is-selected')}>
       <div className="alarm-main">
         <span className="reminder-text">
-          {isAction && <><Pill tone="accent">Action</Pill>{' '}</>}
           {r.text}
         </span>
         <span className="small">{when}</span>
@@ -113,17 +102,20 @@ function ReminderRow({ reminder: r, now, active, onEdit, onToggle, onDelete, onA
   );
 }
 
-export default function RemindersView({ reminders, now, reload }) {
+// One view for both tabs: reminders (the device chimes and the assistant
+// says them) and actions (the assistant carries them out). Both are stored
+// as reminders; `action` tells them apart.
+export default function RemindersView({ reminders, now, reload, actions = false }) {
   const toast = useToast();
   const [editing, setEditing] = useState(null);
   const initial = useMemo(
-    () => (editing ? { id: editing.id, text: editing.text, action: Boolean(editing.action), when: whenFromItem(editing) } : blank()),
-    [editing]
+    () => (editing ? { id: editing.id, text: editing.text, action: Boolean(editing.action), when: whenFromItem(editing) } : blank(actions)),
+    [editing, actions]
   );
-  const list = reminders || [];
-  const pending = list.filter((r) => r.pending && !r.action);
+  const list = (reminders || []).filter((r) => Boolean(r.action) === actions);
+  const pending = actions ? [] : list.filter((r) => r.pending);
   const rest = list
-    .filter((r) => !r.pending || r.action)
+    .filter((r) => actions || !r.pending)
     .sort((a, b) => (b.enabled - a.enabled) || ((a.next_fire || Infinity) - (b.next_fire || Infinity)));
 
   const run = async (fn, what) => {
@@ -138,7 +130,7 @@ export default function RemindersView({ reminders, now, reload }) {
   const rowProps = {
     now,
     onEdit: setEditing,
-    onToggle: (r, enabled) => run(() => saveReminder({ id: r.id, enabled }), 'change the reminder'),
+    onToggle: (r, enabled) => run(() => saveReminder({ id: r.id, enabled }), actions ? 'change the action' : 'change the reminder'),
     onDelete: (r) => run(async () => {
       await deleteReminder(r.id);
       if (editing?.id === r.id) setEditing(null);
@@ -165,13 +157,19 @@ export default function RemindersView({ reminders, now, reload }) {
             </div>
           </Card>
         )}
-        <Card title="Reminders & actions" icon={StickyNote} padded={false}>
+        <Card title={actions ? 'Actions' : 'Reminders'} icon={actions ? Zap : StickyNote} padded={false}>
           {reminders === null ? (
             <div className="loading" />
           ) : rest.length === 0 ? (
-            <Empty icon={StickyNote} title={pending.length ? 'Nothing else coming up' : 'No reminders or actions'}>
-              Add one here or say "remind me to call mum tomorrow at 6" or "schedule action play lofi at 7 am".
-            </Empty>
+            actions ? (
+              <Empty icon={Zap} title="No actions">
+                Add one here or say "play lofi music at 7 am tomorrow".
+              </Empty>
+            ) : (
+              <Empty icon={StickyNote} title={pending.length ? 'Nothing else coming up' : 'No reminders'}>
+                Add one here or say "remind me to call mum tomorrow at 6".
+              </Empty>
+            )
           ) : (
             <div className="rows">
               {rest.map((r) => <ReminderRow key={r.id} reminder={r} active={editing?.id === r.id} {...rowProps} />)}

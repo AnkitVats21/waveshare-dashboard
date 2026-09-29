@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlarmClock, StickyNote, Timer } from 'lucide-react';
+import { AlarmClock, StickyNote, Timer, Zap } from 'lucide-react';
 import { PageHeader, Segmented } from '../components/ui';
 import { useNexus } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
@@ -10,7 +10,7 @@ import TimersView from './alarms/TimersView';
 import RemindersView from './alarms/RemindersView';
 import ClockCard from './alarms/ClockCard';
 
-const SUBS = ['alarms', 'timers', 'reminders'];
+const SUBS = ['alarms', 'timers', 'reminders', 'actions'];
 
 const subFromHash = () => {
   const sub = window.location.hash.replace(/^#\/?/, '').split('/')[1];
@@ -49,24 +49,25 @@ export default function Alarms() {
   }, [expired, reloadAlarms]);
 
   const change = (v) => {
-    window.history.replaceState(null, '', `#/alarms/${v}`);
+    window.history.replaceState(null, '', `#/schedules/${v}`);
     setSub(v);
   };
 
-  const pending = (reminders.data || []).filter((r) => r.pending).length;
+  const pending = (reminders.data || []).filter((r) => r.pending && !r.action).length;
   const alarmList = alarms.loading && !alarms.data ? null : alarms.data || [];
   const reminderList = reminders.loading && !reminders.data ? null : reminders.data || [];
 
   return (
     <>
-      <PageHeader title="Alarms" subtitle="Alarms, timers, reminders and actions. You can also ask the assistant.">
+      <PageHeader title="Schedules" subtitle="Alarms, timers, reminders and actions. You can also ask the assistant.">
         <Segmented
           value={sub}
           onChange={change}
           options={[
             { value: 'alarms', label: 'Alarms', icon: AlarmClock },
             { value: 'timers', label: 'Timers', icon: Timer, badge: timers.length || null },
-            { value: 'reminders', label: 'Reminders & actions', icon: StickyNote, badge: pending || null },
+            { value: 'reminders', label: 'Reminders', icon: StickyNote, badge: pending || null },
+            { value: 'actions', label: 'Actions', icon: Zap },
           ]}
         />
       </PageHeader>
@@ -74,6 +75,7 @@ export default function Alarms() {
       {sub === 'alarms' && <AlarmsView alarms={alarmList} now={clock.now} reload={reloadAlarms} />}
       {sub === 'timers' && <TimersView alarms={alarmList} now={clock.now} reload={reloadAlarms} />}
       {sub === 'reminders' && <RemindersView reminders={reminderList} now={clock.now} reload={reloadReminders} />}
+      {sub === 'actions' && <RemindersView key="actions" actions reminders={reminderList} now={clock.now} reload={reloadReminders} />}
     </>
   );
 }

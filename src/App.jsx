@@ -16,14 +16,18 @@ export const PAGES = [
   { id: 'home', label: 'Home', icon: HomeIcon, component: Home },
   { id: 'music', label: 'Music', icon: Music2, component: Music },
   { id: 'assistant', label: 'Assistant', icon: Sparkles, component: Assistant },
-  { id: 'alarms', label: 'Alarms', icon: AlarmClock, component: Alarms },
+  { id: 'schedules', label: 'Schedules', icon: AlarmClock, component: Alarms },
   { id: 'recordings', label: 'Recordings', short: 'Record', icon: Mic, component: Recordings },
   { id: 'device', label: 'Device', icon: SlidersHorizontal, component: Device },
   { id: 'system', label: 'System', icon: Cpu, component: System },
 ];
 
+// Old links (#/alarms/...) open the Schedules page.
+const ALIASES = { alarms: 'schedules' };
+
 const pageFromHash = () => {
-  const id = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+  const raw = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+  const id = ALIASES[raw] || raw;
   return PAGES.some((p) => p.id === id) ? id : 'home';
 };
 

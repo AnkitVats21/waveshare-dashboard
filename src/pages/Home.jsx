@@ -99,7 +99,7 @@ function NextAlarm() {
   const timers = (alarms || []).filter((a) => a.kind === 'timer').length;
   const due = (reminders || []).filter((r) => r.pending).length;
   return (
-    <Card title="Next alarm" icon={AlarmClock} action={<a className="link" href="#/alarms">Alarms <ChevronRight size={14} /></a>}>
+    <Card title="Next alarm" icon={AlarmClock} action={<a className="link" href="#/schedules">Schedules <ChevronRight size={14} /></a>}>
       {next ? (
         <div className="big-time">
           <span className="mono">{timeOf(next)}</span>
@@ -112,8 +112,8 @@ function NextAlarm() {
       )}
       {(timers > 0 || due > 0) && (
         <div className="next-extra">
-          {timers > 0 && <a className="link" href="#/alarms/timers">{timers === 1 ? '1 timer running' : `${timers} timers running`}</a>}
-          {due > 0 && <a className="link" href="#/alarms/reminders">{due === 1 ? '1 reminder due' : `${due} reminders due`}</a>}
+          {timers > 0 && <a className="link" href="#/schedules/timers">{timers === 1 ? '1 timer running' : `${timers} timers running`}</a>}
+          {due > 0 && <a className="link" href="#/schedules/reminders">{due === 1 ? '1 reminder due' : `${due} reminders due`}</a>}
         </div>
       )}
     </Card>
