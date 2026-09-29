@@ -7,7 +7,7 @@ import { Button, Card, Empty, IconButton, PageHeader, Segmented, Switch } from '
 import { TrackArt, useTrackInfo } from '../components/Track';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
-import { deleteFromLibrary, getLibrary, getMix, playLocal, scanLibrary, searchYouTube } from '../lib/api';
+import { clearUnsavedHistory, deleteFromLibrary, getLibrary, getMix, playLocal, scanLibrary, searchYouTube } from '../lib/api';
 import { needsResolution, resolveTrackInfo } from '../lib/trackMetadata';
 import { formatBytes, formatSeconds } from '../lib/format';
 
@@ -350,6 +350,18 @@ function LibraryView({ onCount }) {
     }
   };
 
+  const unsavedCount = tracks.filter((t) => !t.cached).length;
+  const clearUnsaved = async () => {
+    if (!window.confirm(`Remove ${unsavedCount} songs that aren't saved on the SD card from the library? Their play history goes too.`)) return;
+    try {
+      const res = await clearUnsavedHistory();
+      toast(`Removed ${res?.removed ?? 0} entries`);
+      load();
+    } catch (err) {
+      toast(`Couldn't clear: ${err.message}`, 'error');
+    }
+  };
+
   const play = async (t) => {
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration };
     if (!t.cached) {
@@ -370,10 +382,10 @@ function LibraryView({ onCount }) {
   };
 
   const remove = async (t) => {
-    if (!window.confirm(`Delete the saved file of "${t.title}"? It stays in the library and can still be streamed.`)) return;
+    if (!window.confirm(`Delete "${t.title}"? The file and its library entry, with its play history, are removed.`)) return;
     try {
       await deleteFromLibrary(t.id);
-      toast(`Deleted the file of "${t.title}"`);
+      toast(`Deleted "${t.title}"`);
       load();
     } catch (err) {
       toast(`Delete failed: ${err.message}`, 'error');
@@ -391,6 +403,7 @@ function LibraryView({ onCount }) {
         </div>
         <Switch label="Saved only" checked={savedOnly} onChange={setSavedOnly} />
         <Switch label="Save streams to SD" checked={controls.caching.value} disabled={!online} onChange={controls.caching.commit} />
+        <Button icon={Trash2} disabled={!online || unsavedCount === 0} onClick={clearUnsaved}>Clear unsaved ({unsavedCount})</Button>
         <Button icon={RefreshCw} busy={scanning} onClick={scan}>Rescan</Button>
       </div>
       {loading ? (

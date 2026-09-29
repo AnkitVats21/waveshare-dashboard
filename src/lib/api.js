@@ -137,6 +137,7 @@ export async function getLibrary(filter = '') {
 }
 export const scanLibrary = () => request('/api/music/library/scan', { method: 'POST' });
 export const deleteFromLibrary = (id) => request(`/api/music/library?${q({ id })}`, { method: 'DELETE' });
+export const clearUnsavedHistory = () => request('/api/music/library?unsaved=1', { method: 'DELETE' });
 export const playLocal = (idOrPath) => request('/api/music/play_local', { method: 'POST', json: { id: idOrPath } });
 
 export const playStream = (track, streamUrl) =>
