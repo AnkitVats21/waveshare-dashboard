@@ -8,6 +8,7 @@ import { daysLabel, formatUntil, formatWhen, timeOf } from '../../lib/schedule';
 import { needsResolution, resolveTrackInfo } from '../../lib/trackMetadata';
 import { WhenFields, whenFromItem, whenToFields } from './WhenFields';
 import { TonePicker, formatTone } from './TonePicker';
+import BriefingMusicCard from './BriefingMusicCard';
 
 const DEFAULT_VOLUME = 60;   // AlarmService::MIN_VOLUME: the floor when volume is 0
 
@@ -266,30 +267,33 @@ export default function AlarmsView({ alarms, now, reload }) {
         }}
         onCancel={() => setEditing(null)}
       />
-      <Card title="Your alarms" icon={AlarmClock} padded={false}>
-        {alarms === null ? (
-          <div className="loading" />
-        ) : list.length === 0 ? (
-          <Empty icon={AlarmClock} title="No alarms">
-            Add one here or say "wake me up at 7 on weekdays".
-          </Empty>
-        ) : (
-          <div className="rows">
-            {list.map((a) => (
-              <AlarmRow
-                key={a.id}
-                alarm={a}
-                songs={songs}
-                now={now}
-                active={editing?.id === a.id}
-                onEdit={setEditing}
-                onToggle={toggle}
-                onDelete={remove}
-              />
-            ))}
-          </div>
-        )}
-      </Card>
+      <div className="stack" style={{ gap: 20 }}>
+        <Card title="Your alarms" icon={AlarmClock} padded={false}>
+          {alarms === null ? (
+            <div className="loading" />
+          ) : list.length === 0 ? (
+            <Empty icon={AlarmClock} title="No alarms">
+              Add one here or say "wake me up at 7 on weekdays".
+            </Empty>
+          ) : (
+            <div className="rows">
+              {list.map((a) => (
+                <AlarmRow
+                  key={a.id}
+                  alarm={a}
+                  songs={songs}
+                  now={now}
+                  active={editing?.id === a.id}
+                  onEdit={setEditing}
+                  onToggle={toggle}
+                  onDelete={remove}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+        <BriefingMusicCard />
+      </div>
     </div>
   );
 }

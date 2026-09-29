@@ -562,6 +562,18 @@ textarea { resize: vertical; line-height: 1.5; }
 .alarm-actions .switch { margin-left: 8px; }
 .alarm.is-selected { background: var(--accent-soft); }
 .reminder-text { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.briefing-music-item {
+  display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+  border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.briefing-music-item:hover { background: var(--surface-3); }
+.briefing-music-item.is-selected { border-color: var(--accent); background: var(--accent-soft); }
+.briefing-item-radio { display: grid; place-items: center; flex: none; }
+.briefing-item-radio input { cursor: pointer; margin: 0; }
+.briefing-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.briefing-item-title { font-size: 13.5px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.briefing-item-actions { display: flex; align-items: center; gap: 4px; flex: none; }
 
 /* Recordings */
 .rec-recorder { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }

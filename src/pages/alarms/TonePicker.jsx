@@ -10,6 +10,7 @@ import {
   startYouTubeTone,
   uploadToneFile,
 } from '../../lib/api';
+import { sniffAudioFile, opusErrorMessage } from '../../lib/audioSniff';
 
 const TONE_SOURCES = [
   { value: 'builtin', label: 'Built-in' },
@@ -129,12 +130,15 @@ export function TonePicker({ value, onChange, songs, onRefreshLibrary }) {
     if (!file) return;
     e.target.value = '';
 
+    const sniff = await sniffAudioFile(file);
+    if (!sniff.playable) {
+      toast(opusErrorMessage(sniff.format), 'error');
+      return;
+    }
+
     const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
     if (!['.ogg', '.opus', '.webm'].includes(ext)) {
-      toast(
-        'Only Opus audio files (.ogg, .opus, .webm) are supported. Convert with: ffmpeg -i in.mp3 -c:a libopus -b:a 96k out.ogg',
-        'error'
-      );
+      toast(opusErrorMessage(sniff.format), 'error');
       return;
     }
 

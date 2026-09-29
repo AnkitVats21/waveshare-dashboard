@@ -223,6 +223,19 @@ export const startYouTubeTone = ({ id, title, artist }) =>
   request('/api/alarms/tones/youtube', { method: 'POST', json: { id, title, artist } });
 export const getYouTubeToneStatus = () => request('/api/alarms/tones/youtube');
 
+export const getBriefingMusic = () => request('/api/alarms/briefing');
+export const saveBriefingMusic = ({ music, duck }) => {
+  const json = {};
+  if (music !== undefined) json.music = music;
+  if (duck !== undefined) json.duck = Number(duck);
+  return request('/api/alarms/briefing', { method: 'POST', json });
+};
+export const playAlarmMedia = (nameOrPath) => {
+  const path = nameOrPath.startsWith('/') ? nameOrPath : `/sdcard/media/alarm/${nameOrPath}`;
+  return request(`/api/music/play_local?${q({ path })}`, { method: 'POST' });
+};
+export const stopMusic = () => request('/api/music/control', { method: 'POST', json: { action: 'stop' } });
+
 export const getReminders = () => request('/api/reminders');
 export const saveReminder = (reminder) => request('/api/reminders', { method: 'POST', json: reminder });
 export const deleteReminder = (id) => request(`/api/reminders?${q({ id })}`, { method: 'DELETE' });
