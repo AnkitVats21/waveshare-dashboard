@@ -4,7 +4,7 @@ import { formatBytes, signalLabel } from '../lib/format';
 
 // Device health for the sidebar: CPU and free RAM over the last ~2 minutes
 // of the telemetry the device pushes every 2 s over /api/ws (no extra
-// requests), and the Wi-Fi signal as bars.
+// requests), Wi-Fi throughput from the byte counters, and the signal as bars.
 const KEEP = 60;
 const SRAM_LOW = 20 * 1024;   // below this the device is under memory pressure
 
@@ -58,12 +58,19 @@ function Metric({ label, value, children, tone }) {
 
 export default function HealthPanel() {
   const { snapshot, online } = useNexus();
-  const [hist, setHist] = useState({ c0: [], c1: [], sram: [] });
+  const [hist, setHist] = useState({ c0: [], c1: [], sram: [], rx: [], tx: [] });
   const lastUp = useRef(-1);
+  const lastNet = useRef(null);
 
   // One sample per telemetry push (the uptime second changes).
   useEffect(() => {
     if (!online || !snapshot.up || snapshot.up === lastUp.current) return;
+    const dt = lastNet.current ? snapshot.up - lastNet.current.up : 0;
+    // KB/s from the byte totals; unsigned 32-bit subtraction survives the wrap.
+    const rate = (now, before) => (dt > 0 ? ((now - before) >>> 0) / 1024 / dt : 0);
+    const rx = lastNet.current ? rate(snapshot.rx, lastNet.current.rx) : 0;
+    const tx = lastNet.current ? rate(snapshot.tx, lastNet.current.tx) : 0;
+    lastNet.current = { up: snapshot.up, rx: snapshot.rx, tx: snapshot.tx };
     lastUp.current = snapshot.up;
     setHist((h) => {
       const add = (arr, v) => [...arr.slice(-(KEEP - 1)), v];
@@ -71,9 +78,11 @@ export default function HealthPanel() {
         c0: add(h.c0, snapshot.c0),
         c1: add(h.c1, snapshot.c1),
         sram: add(h.sram, snapshot.sram / 1024),
+        rx: add(h.rx, rx),
+        tx: add(h.tx, tx),
       };
     });
-  }, [online, snapshot.up, snapshot.c0, snapshot.c1, snapshot.sram]);
+  }, [online, snapshot.up, snapshot.c0, snapshot.c1, snapshot.sram, snapshot.rx, snapshot.tx]);
 
   if (!online || hist.c0.length === 0) {
     return (
@@ -85,6 +94,10 @@ export default function HealthPanel() {
   }
 
   const sramMax = Math.max(64, ...hist.sram) * 1.1;
+  const netMax = Math.max(64, ...hist.rx, ...hist.tx) * 1.1;
+  const rxNow = hist.rx[hist.rx.length - 1] || 0;
+  const txNow = hist.tx[hist.tx.length - 1] || 0;
+  const kbs = (v) => (v >= 1024 ? `${(v / 1024).toFixed(1)} MB/s` : `${Math.round(v)} KB/s`);
   const low = snapshot.min_sram ? ` · low ${formatBytes(snapshot.min_sram)}` : '';
   return (
     <div className="health" title="Last 2 minutes">
@@ -102,6 +115,17 @@ export default function HealthPanel() {
       <Metric label="Free RAM" value={formatBytes(snapshot.sram)} tone={snapshot.sram < SRAM_LOW ? 'is-low' : ''}>
         <Sparkline min={0} max={sramMax} series={[{ key: 'sram', className: 'spark-a', values: hist.sram }]} />
         {low && <div className="health-note">{`internal${low}`}</div>}
+      </Metric>
+      <Metric label="Network" value={`↓ ${kbs(rxNow)} · ↑ ${kbs(txNow)}`}>
+        <Sparkline
+          min={0}
+          max={netMax}
+          series={[
+            { key: 'rx', className: 'spark-a', values: hist.rx },
+            { key: 'tx', className: 'spark-b', values: hist.tx },
+          ]}
+        />
+        <div className="health-note">{`since boot ↓ ${formatBytes(snapshot.rx)} · ↑ ${formatBytes(snapshot.tx)}`}</div>
       </Metric>
       <div className="health-head" title={snapshot.rssi ? `${snapshot.rssi} dBm` : ''}>
         <span className="health-label">Wi-Fi</span>

@@ -48,6 +48,18 @@ function useLivePosition(music, playing) {
   return [pos, jump];
 }
 
+// What the card holds of the current song.
+function CacheBadge({ cache }) {
+  if (cache?.state === 'saved') {
+    return <span className="pill pill-ok" title="The whole song is on the SD card">Saved</span>;
+  }
+  if (cache?.state === 'saving') {
+    const pct = cache.total > 0 ? ` ${Math.min(99, Math.floor((cache.done / cache.total) * 100))}%` : '';
+    return <span className="pill pill-accent pill-pulse" title="Downloading to the SD card while it plays">Saving{pct}</span>;
+  }
+  return null;
+}
+
 export default function PlayerBar() {
   const { snapshot, online, act, currentTrack, controls } = useNexus();
   const { music } = snapshot;
@@ -92,7 +104,7 @@ export default function PlayerBar() {
             {busy ? (
               <><Loader2 size={12} className="spin" /> {music.state === 'RESOLVING' ? 'Finding stream…' : 'Buffering…'}</>
             ) : hasTrack ? (
-              info.artist
+              <>{info.artist}<CacheBadge cache={music.cache} /></>
             ) : (
               'Search for a song or say the wake word'
             )}
