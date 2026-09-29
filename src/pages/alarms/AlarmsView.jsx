@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { AlarmClock, Plus, Trash2, Pencil, Volume2, Save, X } from 'lucide-react';
 import { Button, Card, Empty, Field, IconButton, Pill, Segmented, Switch } from '../../components/ui';
 import { useToast } from '../../components/Toast';
-import { deleteAlarm, getLibrary, saveAlarm, stopAlarm, testRing } from '../../lib/api';
+import { deleteAlarm, getBriefingMusic, getLibrary, saveAlarm, stopAlarm, testRing } from '../../lib/api';
 import { daysLabel, formatUntil, formatWhen, timeOf } from '../../lib/schedule';
 import { needsResolution, resolveTrackInfo } from '../../lib/trackMetadata';
 import { WhenFields, whenFromItem, whenToFields } from './WhenFields';
@@ -104,11 +104,15 @@ function AlarmForm({ initial, songs, onRefreshSongs, now, onSaved, onCancel }) {
   const preview = async () => {
     setTesting(true);
     try {
-      const extra = form.kind === 'briefing'
-        ? { briefing: true, automatic: form.briefing_start === 'automatic' }
-        : {};
-      await testRing(form.tone, 4, extra);
-      toast(form.kind === 'briefing' ? 'Playing briefing preview for 4 s' : 'Playing tone preview for 4 s');
+      // A briefing preview plays only its music: the briefing flags would
+      // start a real briefing session on the device.
+      let tone = form.tone;
+      if (form.kind === 'briefing' && !tone.startsWith('file:')) {
+        const { music } = await getBriefingMusic();
+        tone = music ? `file:${music}` : 'builtin:rising';
+      }
+      await testRing(tone, 4);
+      toast(form.kind === 'briefing' ? 'Playing briefing music for 4 s' : 'Playing tone preview for 4 s');
       setTimeout(async () => {
         try {
           await stopAlarm();
