@@ -219,6 +219,11 @@ export const uploadToneFile = (name, file) =>
     body: file,
   });
 export const deleteToneFile = (name) => deleteFile(`/sdcard/media/alarm/${name}`);
+export const renameToneFile = (from, to) =>
+  request('/api/files/rename', {
+    method: 'POST',
+    json: { old_path: `/sdcard/media/alarm/${from}`, new_path: `/sdcard/media/alarm/${to}` },
+  });
 export const startYouTubeTone = ({ id, title, artist }) =>
   request('/api/alarms/tones/youtube', { method: 'POST', json: { id, title, artist } });
 export const getYouTubeToneStatus = () => request('/api/alarms/tones/youtube');

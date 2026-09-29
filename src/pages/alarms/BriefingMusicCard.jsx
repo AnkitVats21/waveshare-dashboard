@@ -1,20 +1,40 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Music, Play, Square, Upload } from 'lucide-react';
+import { Check, Music, Pencil, Play, Square, Trash2, Upload, X } from 'lucide-react';
 import { Button, Card, Field, IconButton, Pill } from '../../components/ui';
 import CommitSlider from '../../components/CommitSlider';
 import { useToast } from '../../components/Toast';
 import { formatBytes } from '../../lib/format';
 import {
+  deleteToneFile,
+  getAlarms,
   getAlarmStatus,
   getBriefingMusic,
   playAlarmMedia,
   saveBriefingMusic,
+  renameToneFile,
+  saveAlarm,
   stopMusic,
   uploadToneFile,
 } from '../../lib/api';
 import { sniffAudioFile, opusErrorMessage } from '../../lib/audioSniff';
 import { useNexus } from '../../DeviceContext';
+
+// The device's rules for files in the alarm folder.
+function nameError(name) {
+  if (name.length > 48 || /^[.\s]/.test(name) || !/^[a-zA-Z0-9 _.-]+$/.test(name)) {
+    return 'File name must be at most 48 characters, cannot start with "." or space, and can only contain letters, numbers, spaces, -, _, .';
+  }
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+  if (!['.ogg', '.opus', '.webm'].includes(ext)) return 'The name must end in .ogg, .opus or .webm';
+  return null;
+}
+
+// Alarms whose tone is this file.
+async function alarmsUsing(name) {
+  const alarms = (await getAlarms()) || [];
+  return alarms.filter((a) => a.tone === `file:${name}`);
+}
 
 export default function BriefingMusicCard() {
   const toast = useToast();
@@ -29,6 +49,9 @@ export default function BriefingMusicCard() {
   const [previewing, setPreviewing] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [phase, setPhase] = useState('off');
+  const [renaming, setRenaming] = useState(null);   // file name being renamed
+  const [newName, setNewName] = useState('');
+  const [busyFile, setBusyFile] = useState(null);
 
   const loadConfig = async () => {
     try {
@@ -114,6 +137,73 @@ export default function BriefingMusicCard() {
     }
   };
 
+  const startRename = (name) => {
+    setRenaming(name);
+    setNewName(name);
+  };
+
+  // Renames the file, then points the briefing music setting and any alarm
+  // that uses it at the new name.
+  const handleRename = async (from) => {
+    const to = newName.trim();
+    if (!to || to === from) {
+      setRenaming(null);
+      return;
+    }
+    const err = nameError(to);
+    if (err) {
+      toast(err, 'error');
+      return;
+    }
+    if (files.some((f) => f.name === to)) {
+      toast(`${to} already exists`, 'error');
+      return;
+    }
+    setBusyFile(from);
+    try {
+      if (previewing === from) await handleStop();
+      await renameToneFile(from, to);
+      if (music === from) await saveBriefingMusic({ music: to });
+      const users = await alarmsUsing(from);
+      for (const a of users) await saveAlarm({ id: a.id, tone: `file:${to}` });
+      toast(users.length ? `Renamed to ${to}; ${users.length} alarm(s) updated` : `Renamed to ${to}`);
+      setRenaming(null);
+    } catch (e) {
+      toast(`Rename failed: ${e.message}`, 'error');
+    } finally {
+      setBusyFile(null);
+      await loadConfig();
+    }
+  };
+
+  // Deletes the file. The briefing music setting falls back to None, and
+  // alarms that used it go back to their default (a briefing alarm: the
+  // briefing music; an alarm: the classic tone).
+  const handleDelete = async (name) => {
+    let users = [];
+    try {
+      users = await alarmsUsing(name);
+    } catch {}
+    const parts = [];
+    if (music === name) parts.push('it is the current briefing music');
+    if (users.length) parts.push(`${users.length} alarm(s) use it`);
+    const note = parts.length ? ` (${parts.join('; ')})` : '';
+    if (!window.confirm(`Delete ${name}${note}?`)) return;
+    setBusyFile(name);
+    try {
+      if (previewing === name) await handleStop();
+      await deleteToneFile(name);
+      if (music === name) await saveBriefingMusic({ music: '' });
+      for (const a of users) await saveAlarm({ id: a.id, tone: '' });
+      toast(`Deleted ${name}`);
+    } catch (e) {
+      toast(`Delete failed: ${e.message}`, 'error');
+    } finally {
+      setBusyFile(null);
+      await loadConfig();
+    }
+  };
+
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -126,21 +216,9 @@ export default function BriefingMusicCard() {
       return;
     }
 
-    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-    if (!['.ogg', '.opus', '.webm'].includes(ext)) {
-      toast(opusErrorMessage(sniff.format), 'error');
-      return;
-    }
-
-    if (
-      file.name.length > 48 ||
-      /^[.\s]/.test(file.name) ||
-      !/^[a-zA-Z0-9 _.-]+$/.test(file.name)
-    ) {
-      toast(
-        'File name must be at most 48 characters, cannot start with "." or space, and can only contain letters, numbers, spaces, -, _, .',
-        'error'
-      );
+    const nameErr = nameError(file.name);
+    if (nameErr) {
+      toast(nameErr, 'error');
       return;
     }
 
@@ -232,13 +310,55 @@ export default function BriefingMusicCard() {
                       onChange={() => handleSelect(f.name)}
                     />
                   </div>
-                  <div className="briefing-item-info">
-                    <span className="briefing-item-title">{f.name}</span>
-                    <span className="muted small">
-                      {f.missing ? 'Missing from SD card' : formatBytes(f.bytes)}
-                    </span>
-                  </div>
+                  {renaming === f.name ? (
+                    <div className="briefing-item-info" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        value={newName}
+                        maxLength={48}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRename(f.name);
+                          if (e.key === 'Escape') setRenaming(null);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="briefing-item-info">
+                      <span className="briefing-item-title">{f.name}</span>
+                      <span className="muted small">
+                        {f.missing ? 'Missing from SD card' : formatBytes(f.bytes)}
+                      </span>
+                    </div>
+                  )}
                   <div className="briefing-item-actions" onClick={(e) => e.stopPropagation()}>
+                    {renaming === f.name ? (
+                      <>
+                        <IconButton
+                          icon={Check}
+                          label="Save name"
+                          disabled={busyFile === f.name}
+                          onClick={() => handleRename(f.name)}
+                        />
+                        <IconButton icon={X} label="Cancel" onClick={() => setRenaming(null)} />
+                      </>
+                    ) : (
+                      <>
+                        <IconButton
+                          icon={Pencil}
+                          label={`Rename ${f.name}`}
+                          disabled={f.missing || busyFile === f.name}
+                          onClick={() => startRename(f.name)}
+                        />
+                        <IconButton
+                          icon={Trash2}
+                          label={`Delete ${f.name}`}
+                          danger
+                          disabled={f.missing || busyFile === f.name}
+                          onClick={() => handleDelete(f.name)}
+                        />
+                      </>
+                    )}
                     {isCurrentPreview ? (
                       <IconButton
                         icon={Square}
