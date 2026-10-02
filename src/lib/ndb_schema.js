@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 3543000558,
+    "hash": 1358799320,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -151,6 +151,11 @@ export const NDB_SCHEMAS = {
             "name": "briefing_duck",
             "type": "u8",
             "default": 20
+          },
+          "22": {
+            "name": "hub_url",
+            "type": "string",
+            "default": ""
           }
         }
       },
