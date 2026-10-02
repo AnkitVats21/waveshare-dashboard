@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 742084037,
+    "hash": 1335615333,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -159,6 +159,11 @@ export const NDB_SCHEMAS = {
           },
           "23": {
             "name": "voice_backend",
+            "type": "u8",
+            "default": 0
+          },
+          "24": {
+            "name": "music_control",
             "type": "u8",
             "default": 0
           }
