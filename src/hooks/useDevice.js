@@ -31,6 +31,8 @@ export const EMPTY_SNAPSHOT = {
   },
   assistant: { state: 'idle', connection: 'disconnected' },
   alarm: { ringing: false, id: 0, state: 'idle' },
+  // Satellites (nexus-orbit) that can play the music instead of the board.
+  orbit: { active_target: 'local', satellites: [] },
 };
 
 // Single WebSocket to the device control channel (/api/ws).
@@ -86,6 +88,7 @@ export function useDevice(host) {
             music: { ...EMPTY_SNAPSHOT.music, ...data.music },
             assistant: { ...EMPTY_SNAPSHOT.assistant, ...data.assistant },
             alarm: { ...EMPTY_SNAPSHOT.alarm, ...data.alarm },
+            orbit: { ...EMPTY_SNAPSHOT.orbit, ...data.orbit },
           });
         } catch (e) {
           console.warn('[ws] parse error', e);

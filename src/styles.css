@@ -732,6 +732,25 @@ textarea { resize: vertical; line-height: 1.5; }
 .player-volume .commit-slider { max-width: 130px; }
 .time { font-size: 11.5px; color: var(--text-3); min-width: 36px; text-align: center; }
 
+/* Output picker: board speaker or a satellite (opens upwards from the player). */
+.output-picker { position: relative; flex-shrink: 0; }
+.output-menu {
+  position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 40;
+  width: 230px; max-width: calc(100vw - 32px); padding: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+.output-menu-title { padding: 6px 10px 4px; font-size: 11.5px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.output-option {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 7px; background: none;
+  color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.output-option:hover { background: var(--surface-2); }
+.output-option.is-selected { color: var(--accent); }
+.output-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.output-menu-hint { padding: 6px 10px 4px; font-size: 11.5px; color: var(--text-3); }
+
 /* ── Toasts ────────────────────────────────────────────────────────────── */
 
 .toasts {

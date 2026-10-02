@@ -5,6 +5,7 @@ import {
   RotateCcw, RotateCw, Square, ExternalLink,
 } from 'lucide-react';
 import CommitSlider from './CommitSlider';
+import OutputPicker from './OutputPicker';
 import { IconButton } from './ui';
 import { TrackArt, useTrackInfo } from './Track';
 import { useNexus } from '../DeviceContext';
@@ -118,6 +119,7 @@ export default function PlayerBar() {
             onClick={() => window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(currentTrack.id)}`, '_blank', 'noopener')}
           />
         )}
+        <OutputPicker />
       </div>
 
       <div className="player-center">
