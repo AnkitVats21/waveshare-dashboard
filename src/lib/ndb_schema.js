@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 1335615333,
+    "hash": 1456982921,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -166,6 +166,21 @@ export const NDB_SCHEMAS = {
             "name": "music_control",
             "type": "u8",
             "default": 0
+          },
+          "25": {
+            "name": "uplink_codec",
+            "type": "u8",
+            "default": 0
+          },
+          "26": {
+            "name": "uplink_opus_kbps",
+            "type": "u8",
+            "default": 24
+          },
+          "27": {
+            "name": "uplink_opus_complexity",
+            "type": "u8",
+            "default": 3
           }
         }
       },
