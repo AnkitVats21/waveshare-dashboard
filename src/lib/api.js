@@ -276,6 +276,10 @@ export const saveMcpConfig = ({ url, max_tools, token }) => {
   return request('/api/mcp', { method: 'POST', json });
 };
 export const refreshMcpTools = () => request('/api/mcp/refresh', { method: 'POST' });
+// Hub: where voice and music run (on the board, through a hub on the LAN, or
+// the hub when it is up). The token is write-only.
+export const getHub = () => request('/api/hub');
+export const saveHub = (changes) => request('/api/hub', { method: 'POST', json: changes });
 // Start: a conversation as if the wake word was heard, with the longer
 // silence timeout (manual_silence_s). Stop: ends it in any state.
 export const startConversation = () => request('/api/assistant/start', { method: 'POST' });
