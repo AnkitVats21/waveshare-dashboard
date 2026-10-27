@@ -532,6 +532,7 @@ textarea { resize: vertical; line-height: 1.5; }
 .save-bar .small { display: inline-flex; align-items: center; gap: 6px; }
 .assistant-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .note .row { cursor: default; }
+.profiles-intro { margin: 0; padding: 0 20px 14px; }
 
 /* Conversation: start/end and the live transcript */
 .conversation-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

@@ -266,6 +266,10 @@ export const syncTime = () => request('/api/time/sync', { method: 'POST' });
 export const getAssistantConfig = () => request('/api/config/gemini');
 export const getAssistantModels = () => request('/api/config/gemini/models');
 export const saveAssistantConfig = (config) => request('/api/config/gemini', { method: 'POST', json: config });
+export const getProfiles = () => request('/api/assistant/profiles');
+export const saveProfile = (profile) => request('/api/assistant/profiles', { method: 'POST', json: profile });
+export const deleteProfile = (id) => request(`/api/assistant/profiles?${q({ id })}`, { method: 'DELETE' });
+export const activateProfile = (id) => request('/api/assistant/profiles/activate', { method: 'POST', json: { id } });
 // MCP (Model Context Protocol) remote skills
 export const getMcpStatus = () => request('/api/mcp');
 export const saveMcpConfig = ({ url, max_tools, token }) => {

@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 1456982921,
+    "hash": 1574611920,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -181,6 +181,38 @@ export const NDB_SCHEMAS = {
             "name": "uplink_opus_complexity",
             "type": "u8",
             "default": 3
+          },
+          "28": {
+            "name": "active_profile",
+            "type": "u16",
+            "default": 0
+          }
+        }
+      },
+      "6": {
+        "name": "profiles",
+        "key": "string",
+        "cached": true,
+        "fields": {
+          "1": {
+            "name": "name",
+            "type": "string",
+            "default": ""
+          },
+          "2": {
+            "name": "voice",
+            "type": "string",
+            "default": ""
+          },
+          "3": {
+            "name": "instructions",
+            "type": "string",
+            "default": ""
+          },
+          "4": {
+            "name": "model",
+            "type": "string",
+            "default": ""
           }
         }
       },

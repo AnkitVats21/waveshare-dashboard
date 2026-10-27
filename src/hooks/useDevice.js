@@ -29,7 +29,7 @@ export const EMPTY_SNAPSHOT = {
     queue: [],
     queue_length: 0,
   },
-  assistant: { state: 'idle', connection: 'disconnected' },
+  assistant: { state: 'idle', connection: 'disconnected', profile: '' },
   alarm: { ringing: false, id: 0, state: 'idle' },
   // Satellites (nexus-orbit) that can play the music instead of the board.
   orbit: { active_target: 'local', satellites: [] },

@@ -4,23 +4,14 @@ import { Sparkles, Brain, StickyNote, KeyRound, AlertTriangle, Save, Trash2, Che
 import { Banner, Button, Card, Empty, Field, IconButton, PageHeader, Pill, Segmented, Switch } from '../components/ui';
 import Conversation from './assistant/Conversation';
 import McpCard from './assistant/McpCard';
+import Profiles, { ModelSelect } from './assistant/Profiles';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
-import { ASSISTANT_STATES } from './Home';
+import { ASSISTANT_STATES, assistantLabel } from './Home';
 import {
   MEMORY_FILE, NOTES_DIR, deleteFile, getAssistantConfig, getAssistantModels, listFiles, readTextFile, saveAssistantConfig, writeTextFile,
 } from '../lib/api';
 import { formatBytes } from '../lib/format';
-
-// Gemini Live prebuilt voices and their style.
-const VOICES = [
-  ['Zephyr', 'Bright'], ['Puck', 'Upbeat'], ['Charon', 'Informative'], ['Kore', 'Firm'], ['Fenrir', 'Excitable'],
-  ['Leda', 'Youthful'], ['Orus', 'Firm'], ['Aoede', 'Breezy'], ['Callirrhoe', 'Easy-going'], ['Autonoe', 'Bright'],
-  ['Enceladus', 'Breathy'], ['Iapetus', 'Clear'], ['Umbriel', 'Easy-going'], ['Algieba', 'Smooth'], ['Despina', 'Smooth'],
-  ['Erinome', 'Clear'], ['Algenib', 'Gravelly'], ['Rasalgethi', 'Informative'], ['Laomedeia', 'Upbeat'], ['Achernar', 'Soft'],
-  ['Alnilam', 'Firm'], ['Schedar', 'Even'], ['Gacrux', 'Mature'], ['Pulcherrima', 'Forward'], ['Achird', 'Friendly'],
-  ['Zubenelgenubi', 'Casual'], ['Vindemiatrix', 'Gentle'], ['Sadachbia', 'Lively'], ['Sadaltager', 'Knowledgeable'], ['Sulafat', 'Warm'],
-];
 
 const MEMORY_LIMIT = 16384;
 const stripModelPrefix = (m) => (m || '').replace(/^models\//, '');
@@ -43,10 +34,10 @@ const searchNote = (status) =>
     ? 'Built into this model.'
     : 'Not on this model: it searches with the Remote Skills (MCP) web search instead.';
 
+// Voice and instructions belong to the profiles (Profiles.jsx); the rest is
+// shared by every profile.
 const formFrom = (cfg) => ({
-  voice: cfg.voice || '',
   model: stripModelPrefix(cfg.model),
-  system_prompt: cfg.system_prompt || '',
   transcripts: cfg.transcripts ?? true,
   transcript_log: cfg.transcript_log ?? true,
   manual_silence_s: cfg.manual_silence_s ?? 10,
@@ -117,13 +108,12 @@ function useSettingsForm({ config, load }) {
   const save = async () => {
     setSaving(true);
     try {
-      // Keep any other fields already in the file; drop the read-only extras.
-      const { api_key_set, defaults: _d, config_error, ...rest } = config?.config_error ? {} : config || {};
+      // Keep any other fields already in the file; drop the read-only extras,
+      // and the voice and prompt (the active profile's, saved there).
+      const { api_key_set, defaults: _d, config_error, voice: _v, system_prompt: _p, ...rest } = config?.config_error ? {} : config || {};
       const body = {
         ...rest,
-        voice: form.voice,
         model: form.model.trim(),
-        system_prompt: form.system_prompt,
         transcripts: form.transcripts,
         transcript_log: form.transcript_log,
         manual_silence_s: intIn(form.manual_silence_s, SILENCE_MIN, SILENCE_MAX, 'The silence timeout (s)'),
@@ -139,7 +129,6 @@ function useSettingsForm({ config, load }) {
         vad_silence_ms: intIn(form.vad_silence_ms, VAD_SILENCE_MIN, VAD_SILENCE_MAX, 'Silence duration (ms)'),
       };
       if (body.weather_location.length > 64) throw new Error('The home city must be at most 64 characters');
-      for (const k of ['voice', 'system_prompt']) if (!body[k]) delete body[k];
       if (newKey.trim()) body.api_key = newKey.trim();
       await saveAssistantConfig(body);
       setNewKey('');
@@ -169,64 +158,37 @@ function SaveBar({ s }) {
 }
 
 function ModelField({ s }) {
-  const { form, set, models, config } = s;
+  const { form, setValue, models, config } = s;
   const defaultModelName = stripModelPrefix(config.defaults?.model);
-  if (models.error) {
-    return (
-      <Field label="Model" hint={`Couldn't load the model list (${models.error}). Enter a Gemini Live model name.`}>
-        <input value={form.model} onChange={set('model')} placeholder={defaultModelName || 'gemini live model'} spellCheck={false} />
-      </Field>
-    );
-  }
-  const savedInList = !form.model || (models.list && models.list.some((m) => m.name === form.model));
+  const hint = models.error
+    ? `Couldn't load the model list (${models.error}). Enter a Gemini Live model name.`
+    : models.loading ? 'Loading the model list from the device…' : 'Used by every profile that names no model of its own.';
   return (
-    <Field
-      label="Model"
-      hint={models.loading ? 'Loading the model list from the device…' : form.model ? 'Selected model' : `Default: ${defaultModelName || 'built-in'}`}
-    >
-      <select value={form.model} onChange={set('model')} disabled={models.loading && !models.list}>
-        <option value="">Firmware default ({defaultModelName || 'built-in'})</option>
-        {models.list?.map((m) => (
-          <option key={m.name} value={m.name}>{m.display_name || m.name}</option>
-        ))}
-        {!savedInList && form.model && <option value={form.model}>{form.model} (saved)</option>}
-      </select>
+    <Field label="Global model" hint={hint}>
+      <ModelSelect value={form.model} onChange={setValue('model')} models={models} emptyLabel={`Firmware default (${defaultModelName || 'built-in'})`} />
     </Field>
   );
 }
 
-function PersonalityTab({ s }) {
-  const { form, set, setValue, config } = s;
-  const defaults = config.defaults || {};
+function PersonalityTab({ s, cfg }) {
+  const { form, setValue, models, config } = s;
+  const globalModel = form.model || stripModelPrefix(config.defaults?.model);
   return (
-    <Card title="Voice & personality" icon={Sparkles}>
+    <div className="stack">
       {config.config_error && (
         <Banner tone="warn" icon={AlertTriangle}>
           The settings file on the SD card is damaged, so the device is using its built-in settings.
           Saving here rewrites it and keeps your API key.
         </Banner>
       )}
-      <div className="form-grid">
-        <Field label="Voice" hint={`Default: ${defaults.voice || 'built-in'}`}>
-          <select value={form.voice} onChange={set('voice')}>
-            <option value="">Default ({defaults.voice || 'built-in'})</option>
-            {VOICES.map(([name, style]) => (
-              <option key={name} value={name}>{name} · {style}</option>
-            ))}
-          </select>
-        </Field>
-        <ModelField s={s} />
-      </div>
-      <Field label="Personality & instructions" hint="Sent to the assistant at the start of every conversation, e.g. tone, language, how brief to be.">
-        <textarea
-          rows={6}
-          value={form.system_prompt}
-          onChange={set('system_prompt')}
-          placeholder="You are Nexus, a friendly speaker assistant. Keep answers short. Reply in Hindi when I speak Hindi."
-        />
-      </Field>
-      <Switch checked={form.barge_in} onChange={setValue('barge_in')} label="Barge-in: talk over a reply to interrupt it (experimental)" />
-    </Card>
+      <Profiles models={models} defaults={config.defaults || {}} globalModel={globalModel} onActiveChange={cfg.load} />
+      <Card title="Shared by all profiles" icon={Sparkles}>
+        <div className="stack">
+          <ModelField s={s} />
+          <Switch checked={form.barge_in} onChange={setValue('barge_in')} label="Barge-in: talk over a reply to interrupt it (experimental)" />
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -332,7 +294,7 @@ function SettingsTabs({ cfg, s, sub }) {
   if (!cfg.config) return <Card title="Settings" icon={Settings2}><div className="loading" /></Card>;
   return (
     <>
-      {sub === 'personality' && <PersonalityTab s={s} />}
+      {sub === 'personality' && <PersonalityTab s={s} cfg={cfg} />}
       {sub === 'skills' && <SkillsTab s={s} />}
       {sub === 'advanced' && <AdvancedTab s={s} />}
     </>
@@ -504,7 +466,7 @@ export default function Assistant() {
       <PageHeader
         title="Assistant"
         subtitle="Talk to it from here, and set how it sounds, what it can do and what it remembers."
-        status={<Pill tone={st.tone} pulse={snapshot.assistant.state !== 'idle'}>{st.label}</Pill>}
+        status={<Pill tone={st.tone} pulse={snapshot.assistant.state !== 'idle'}>{assistantLabel(snapshot)}</Pill>}
       >
         <Segmented
           value={sub}

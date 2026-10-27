@@ -23,6 +23,12 @@ export const ASSISTANT_STATES = {
   error: { label: 'Error, retrying soon', tone: 'danger' },
 };
 
+// "Waiting for wake word · Yoga teacher": the state and the active profile.
+export const assistantLabel = (snapshot) => {
+  const st = ASSISTANT_STATES[snapshot.assistant.state] || ASSISTANT_STATES.idle;
+  return snapshot.assistant.profile ? `${st.label} · ${snapshot.assistant.profile}` : st.label;
+};
+
 function NowPlaying() {
   const { snapshot, online, act, currentTrack } = useNexus();
   const info = useTrackInfo(currentTrack);
@@ -129,7 +135,7 @@ function AssistantStatus() {
       <div className="assistant-status">
         <div className={clsx('orb', active && `orb-${snapshot.assistant.state}`)} />
         <div>
-          <Pill tone={st.tone} pulse={active}>{st.label}</Pill>
+          <Pill tone={st.tone} pulse={active}>{assistantLabel(snapshot)}</Pill>
           <p className="muted small">Say the wake word to start a conversation.</p>
         </div>
       </div>
