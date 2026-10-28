@@ -33,6 +33,7 @@ export function DeviceProvider({ children }) {
   }, [optimisticTrack, snapshot.music.current_track?.id]);
 
   const volume = usePendingValue(snapshot.state.speaker_volume, (v) => send('volume', { value: v }));
+  const bass = usePendingValue(snapshot.state.bass_db, (v) => send('bass', { value: v }));
   const treble = usePendingValue(snapshot.state.treble_db, (v) => send('treble', { value: v }));
   const micGain = usePendingValue(snapshot.state.mic_gain_db, (v) => send('mic_gain', { value: v }));
   const micMuted = usePendingValue(!snapshot.state.mic_enabled, (v) => send('mic_mute', { value: v }));
@@ -75,9 +76,9 @@ export function DeviceProvider({ children }) {
     queueTrack,
     setOptimisticTrack,
     currentTrack: optimisticTrack || snapshot.music.current_track,
-    controls: { volume, treble, micGain, micMuted, repeat, autoplay, caching, led },
+    controls: { volume, bass, treble, micGain, micMuted, repeat, autoplay, caching, led },
   }), [host, setHost, online, snapshot, transcript, send, act, playTrack, queueTrack, optimisticTrack,
-    volume, treble, micGain, micMuted, repeat, autoplay, caching, led]);
+    volume, bass, treble, micGain, micMuted, repeat, autoplay, caching, led]);
 
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;
 }

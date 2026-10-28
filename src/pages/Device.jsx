@@ -30,7 +30,7 @@ function SliderRow({ label, value, unit, ...props }) {
 
 export default function Device() {
   const { online, controls } = useNexus();
-  const { volume, treble, micGain, micMuted, led } = controls;
+  const { volume, bass, treble, micGain, micMuted, led } = controls;
   const disabled = !online;
   const mode = LED_MODES[led.value.mode] || 'off';
   const colorHex = rgbToHex(led.value.color);
@@ -50,8 +50,15 @@ export default function Device() {
               <button key={v} className={clsx('chip', volume.value === v && 'is-active')} disabled={disabled} onClick={() => volume.commit(v)}>{v}%</button>
             ))}
           </div>
-          <SliderRow label="Treble" value={treble.value} unit=" dB" min={-12} max={0} disabled={disabled} onCommit={treble.commit} />
-          <div className="muted small">Lower it if the speaker sounds harsh or tinny. 0 dB is flat.</div>
+          <SliderRow label="Bass" value={bass.value} unit=" dB" min={-12} max={6} disabled={disabled} onCommit={bass.commit} />
+          <SliderRow label="Treble" value={treble.value} unit=" dB" min={-12} max={6} disabled={disabled} onCommit={treble.commit} />
+          <div className="muted small">
+            0 dB is flat. Lower the treble if the speaker sounds harsh. A boost makes everything a little
+            quieter so the loud parts don't distort; raise the volume to make up.
+            {(bass.value !== 0 || treble.value !== 0) && (
+              <> <button className="link" disabled={disabled} onClick={() => { bass.commit(0); treble.commit(0); }}>Reset to flat</button></>
+            )}
+          </div>
         </Card>
 
         <Card title="Microphone" icon={Mic}>
