@@ -119,7 +119,7 @@ export default function HubCard() {
             <Segmented options={MUSIC_MODES} value={music} onChange={setMusic} />
           </Choice>
 
-          <Field label="Hub address" hint="e.g. ws://192.168.1.21:8380/hub/board. Leave empty to find the hub on the network automatically.">
+          <Field label="Hub address" hint="e.g. ws://<hub-address>:8380/hub/board. Leave empty to find the hub on the network automatically.">
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
