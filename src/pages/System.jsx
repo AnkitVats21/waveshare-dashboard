@@ -12,6 +12,7 @@ import {
 } from '../lib/api';
 import { formatBytes, formatUptime, signalLabel } from '../lib/format';
 import HubCard from './system/HubCard';
+import BluetoothCard from './system/BluetoothCard';
 
 function Health() {
   const { data: m } = usePoll(getMetrics, 5000);
@@ -414,6 +415,7 @@ export default function System() {
         <div className="stack">
           <Network />
           <HubCard />
+          <BluetoothCard />
           <Flash />
           <WebApp />
         </div>

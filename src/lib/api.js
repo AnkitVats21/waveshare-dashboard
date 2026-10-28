@@ -284,6 +284,13 @@ export const refreshMcpTools = () => request('/api/mcp/refresh', { method: 'POST
 // the hub when it is up). The token is write-only.
 export const getHub = () => request('/api/hub');
 export const saveHub = (changes) => request('/api/hub', { method: 'POST', json: changes });
+
+// Served by the hub itself (not proxied to the board): its status, and the
+// Bluetooth speaker of the hub's machine (Orbit). Both fail when the
+// dashboard comes from the board.
+export const getHubStatus = () => request('/hub/status');
+export const getBluetooth = () => request('/hub/bluetooth');
+export const bluetoothAction = (action, body) => request(`/hub/bluetooth/${action}`, { method: 'POST', json: body });
 // Start: a conversation as if the wake word was heard, with the longer
 // silence timeout (manual_silence_s). Stop: ends it in any state.
 export const startConversation = () => request('/api/assistant/start', { method: 'POST' });
