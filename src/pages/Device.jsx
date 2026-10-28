@@ -30,7 +30,7 @@ function SliderRow({ label, value, unit, ...props }) {
 
 export default function Device() {
   const { online, controls } = useNexus();
-  const { volume, micGain, micMuted, led } = controls;
+  const { volume, treble, micGain, micMuted, led } = controls;
   const disabled = !online;
   const mode = LED_MODES[led.value.mode] || 'off';
   const colorHex = rgbToHex(led.value.color);
@@ -50,6 +50,8 @@ export default function Device() {
               <button key={v} className={clsx('chip', volume.value === v && 'is-active')} disabled={disabled} onClick={() => volume.commit(v)}>{v}%</button>
             ))}
           </div>
+          <SliderRow label="Treble" value={treble.value} unit=" dB" min={-12} max={0} disabled={disabled} onCommit={treble.commit} />
+          <div className="muted small">Lower it if the speaker sounds harsh or tinny. 0 dB is flat.</div>
         </Card>
 
         <Card title="Microphone" icon={Mic}>

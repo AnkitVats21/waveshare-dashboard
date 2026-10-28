@@ -2,7 +2,7 @@
 // Read with ndb.js: readNdb(buffer, NDB_SCHEMAS.<name>).
 export const NDB_SCHEMAS = {
   "system": {
-    "hash": 1574611920,
+    "hash": 153537106,
     "path": "/sdcard/db/system.ndb",
     "collections": {
       "1": {
@@ -39,6 +39,11 @@ export const NDB_SCHEMAS = {
             "name": "cache_downloads",
             "type": "bool",
             "default": false
+          },
+          "7": {
+            "name": "treble_db",
+            "type": "i32",
+            "default": 0
           }
         }
       },

@@ -14,7 +14,7 @@ export const EMPTY_SNAPSHOT = {
   rssi: 0,
   rx: 0,   // Wi-Fi bytes received since boot (wraps at 4 GB)
   tx: 0,
-  state: { speaker_volume: 0, mic_gain_db: 0, mic_enabled: true, is_recording: false, sample_rate: 0 },
+  state: { speaker_volume: 0, treble_db: 0, mic_gain_db: 0, mic_enabled: true, is_recording: false, sample_rate: 0 },
   led: { mode: 0, color: { r: 0, g: 0, b: 0 }, speed_ms: 500 },
   music: {
     state: 'IDLE',
