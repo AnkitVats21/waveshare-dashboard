@@ -26,9 +26,19 @@ export const ASSISTANT_STATES = {
   error: { label: 'Error, retrying soon', tone: 'danger' },
 };
 
+// What a running tool is doing (assistant.tool: {name, kind}, set by the
+// firmware while a tool runs for over 400 ms).
+const TOOL_LABELS = {
+  search: 'Searching…',
+  music: 'Finding the song…',
+  bluetooth: 'Connecting the speaker…',
+};
+export const toolLabel = (tool) => (tool ? TOOL_LABELS[tool.kind] || 'Working…' : null);
+
 export const assistantLabel = (snapshot) => {
   const st = ASSISTANT_STATES[snapshot.assistant.state] || ASSISTANT_STATES.idle;
-  return snapshot.assistant.profile ? `${st.label} · ${snapshot.assistant.profile}` : st.label;
+  const label = toolLabel(snapshot.assistant.tool) || st.label;
+  return snapshot.assistant.profile ? `${label} · ${snapshot.assistant.profile}` : label;
 };
 
 const QUICK_GENRES = [

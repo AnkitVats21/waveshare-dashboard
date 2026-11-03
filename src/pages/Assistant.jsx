@@ -27,12 +27,16 @@ const VAD_PREFIX_MAX = 2000;
 const VAD_SILENCE_MIN = 0;
 const VAD_SILENCE_MAX = 5000;
 
-// Google Search per model: the firmware gives it to the 2.5 Live models only
+// Google Search per model: the firmware gives it to some 2.5 Live models only
 // (3.x refuses it); the others search through the MCP web_search tool.
 const searchNote = (status) =>
   status === 'yes'
     ? 'Built into this model.'
     : 'Not on this model: it searches with the Remote Skills (MCP) web search instead.';
+const SEARCH_WARNING =
+  'Google Search works only on some Gemini 2.5 Live models, and while it runs the device can\'t show that it is ' +
+  'searching. Off, the assistant searches with the Remote Skills (MCP) web search, on every model, with progress ' +
+  'on the light.';
 
 // Voice and instructions belong to the profiles (Profiles.jsx); the rest is
 // shared by every profile.
@@ -45,7 +49,7 @@ const formFrom = (cfg) => ({
   keepalive_s: cfg.keepalive_s ?? 60,
   echo_measure: cfg.echo_measure ?? false,
   barge_in: cfg.barge_in ?? false,
-  web_search: cfg.web_search ?? true,
+  web_search: cfg.web_search ?? false,
   weather_location: cfg.weather_location || '',
   vad_start: cfg.vad_start ?? 1,
   vad_end: cfg.vad_end ?? 0,
@@ -201,6 +205,7 @@ function SkillsTab({ s }) {
       <Card title="Built-in skills" icon={Wrench}>
         <div className="stack">
           <Switch checked={form.web_search} onChange={setValue('web_search')} label="Google Search for up-to-date answers" />
+          <p className="muted small" style={{ margin: 0 }}>{SEARCH_WARNING}</p>
           {form.web_search && model && <p className="muted small" style={{ margin: 0 }}>{searchNote(model.search)}</p>}
           <Field label="Weather home city" hint="Used when you ask for the weather without naming a place, and in the morning briefing.">
             <input value={form.weather_location} onChange={set('weather_location')} maxLength={64} placeholder="e.g. Pune" />

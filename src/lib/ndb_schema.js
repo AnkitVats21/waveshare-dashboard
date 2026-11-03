@@ -140,7 +140,7 @@ export const NDB_SCHEMAS = {
           "12": {
             "name": "web_search",
             "type": "bool",
-            "default": true
+            "default": false
           },
           "18": {
             "name": "mcp_url",
