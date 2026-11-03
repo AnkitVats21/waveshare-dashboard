@@ -1,10 +1,13 @@
 import React from 'react';
 import clsx from 'clsx';
 import {
-  Play, Pause, SkipForward, ListMusic, AlarmClock, Sparkles, Activity, Mic, MicOff, Lightbulb, LightbulbOff, Volume2, ChevronRight,
+  Play, Pause, SkipForward, ListMusic, AlarmClock, Sparkles, Activity, Mic, MicOff,
+  Lightbulb, LightbulbOff, Volume2, ChevronRight, Music2,
 } from 'lucide-react';
-import { Card, Empty, Meter, Pill, Stat, IconButton } from '../components/ui';
+import { Card, Empty, Meter, Pill, Stat, IconButton, Button } from '../components/ui';
 import CommitSlider from '../components/CommitSlider';
+import OutputPicker from '../components/OutputPicker';
+import { useAudioOutputs } from '../hooks/useAudioOutputs';
 import { TrackArt, useTrackInfo } from '../components/Track';
 import { useNexus, LED_MODES } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
@@ -23,25 +26,49 @@ export const ASSISTANT_STATES = {
   error: { label: 'Error, retrying soon', tone: 'danger' },
 };
 
-// "Waiting for wake word · Yoga teacher": the state and the active profile.
 export const assistantLabel = (snapshot) => {
   const st = ASSISTANT_STATES[snapshot.assistant.state] || ASSISTANT_STATES.idle;
   return snapshot.assistant.profile ? `${st.label} · ${snapshot.assistant.profile}` : st.label;
 };
 
+const QUICK_GENRES = [
+  { label: 'Lofi chill', query: 'lofi hip hop beats to relax' },
+  { label: 'Synthwave', query: 'synthwave retrowave mix' },
+  { label: 'Top Hits', query: 'today top hits' },
+  { label: 'Focus', query: 'deep focus instrumental' },
+];
+
 function NowPlaying() {
   const { snapshot, online, act, currentTrack } = useNexus();
   const info = useTrackInfo(currentTrack);
   const { music } = snapshot;
+  // The speaker the music plays on (the board's, or a hub speaker's own).
+  const { activeVolume: volume } = useAudioOutputs();
   const playing = music.state === 'PLAYING';
   const hasTrack = !!(currentTrack?.id || currentTrack?.title);
 
   if (!hasTrack) {
     return (
       <Card className="now-card">
-        <Empty icon={Play} title="Nothing playing">
-          <a href="#/music">Find something to play</a> or ask the assistant.
-        </Empty>
+        <div className="ready-hero">
+          <div className="ready-icon">
+            <Music2 size={32} />
+          </div>
+          <div className="ready-content">
+            <span className="eyebrow">Acoustic Player Ready</span>
+            <h2 className="now-title">What do you want to hear?</h2>
+            <p className="muted small">
+              Pick a vibe below, <a href="#/music" className="link">search the library</a>, or say the wake word.
+            </p>
+            <div className="chips ready-chips">
+              {QUICK_GENRES.map((g) => (
+                <a key={g.label} href="#/music" className="chip">
+                  {g.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
       </Card>
     );
   }
@@ -54,11 +81,33 @@ function NowPlaying() {
           <span className="eyebrow">{playing ? 'Now playing' : music.state === 'PAUSED' ? 'Paused' : music.state.toLowerCase()}</span>
           <h2 className="now-title">{info.title || currentTrack.id}</h2>
           <p className="now-artist">{info.artist}</p>
-          <div className="now-actions">
-            <button className="play-btn play-btn-lg" disabled={!online} onClick={() => act(playing ? 'pause' : 'resume')} aria-label={playing ? 'Pause' : 'Play'}>
-              {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-            </button>
-            <IconButton icon={SkipForward} label="Next" disabled={!online} onClick={() => act('next')} />
+
+          <div className="now-controls-row">
+            <div className="now-actions">
+              <button
+                className="play-btn play-btn-lg"
+                disabled={!online}
+                onClick={() => act(playing ? 'pause' : 'resume')}
+                aria-label={playing ? 'Pause' : 'Play'}
+              >
+                {playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+              </button>
+              <IconButton icon={SkipForward} label="Next" disabled={!online} onClick={() => act('next')} />
+              <OutputPicker />
+            </div>
+
+            <div className="now-volume">
+              <Volume2 size={16} className="muted" />
+              <CommitSlider
+                min={0}
+                max={100}
+                value={volume.value}
+                disabled={!online}
+                onCommit={volume.commit}
+                aria-label="Volume"
+              />
+              <span className="mono small">{volume.value}%</span>
+            </div>
           </div>
         </div>
       </div>
@@ -66,63 +115,59 @@ function NowPlaying() {
   );
 }
 
-function UpNext() {
-  const { snapshot } = useNexus();
-  const { queue, queue_length: total } = snapshot.music;
-  return (
-    <Card
-      title="Up next"
-      icon={ListMusic}
-      action={<a className="link" href="#/music/queue">Queue <ChevronRight size={14} /></a>}
-    >
-      {queue.length === 0 ? (
-        <p className="muted small">The queue is empty. Autoplay picks similar songs when it runs out.</p>
-      ) : (
-        <ol className="mini-list">
-          {queue.slice(0, 3).map((t, i) => (
-            <li key={`${t.id}-${i}`}>
-              <TrackArt id={t.id} size="sm" />
-              <div className="mini-text">
-                <span className="ellipsis">{t.title}</span>
-                <span className="muted small ellipsis">{t.artist}</span>
-              </div>
-            </li>
-          ))}
-          {total > 3 && <li className="muted small more">+{total - 3} more</li>}
-        </ol>
-      )}
-    </Card>
-  );
-}
-
-function NextAlarm() {
+function CommandStrip() {
+  const { online, controls } = useNexus();
+  const { micMuted, led } = controls;
   const { data: alarms } = usePoll(getAlarms, 60000);
-  const { data: reminders } = usePoll(getReminders, 60000);
   const now = Date.now() / 1000;
   const next = (alarms || [])
     .filter((a) => a.kind !== 'timer' && a.enabled && a.next_fire)
     .sort((a, b) => a.next_fire - b.next_fire)[0];
-  const timers = (alarms || []).filter((a) => a.kind === 'timer').length;
-  const due = (reminders || []).filter((r) => r.pending).length;
+  const ledOn = led.value.mode !== 0;
+  const ledModeName = LED_MODES[led.value.mode] || 'solid';
+
   return (
-    <Card title="Next alarm" icon={AlarmClock} action={<a className="link" href="#/schedules">Schedules <ChevronRight size={14} /></a>}>
-      {next ? (
-        <div className="big-time">
-          <span className="mono">{timeOf(next)}</span>
-          <span className="muted small">
-            {[formatWhen(next.next_fire, now).replace(/ \d\d:\d\d$/, ''), formatUntil(next.next_fire - now), next.label].filter(Boolean).join(' · ')}
-          </span>
+    <div className="cmd-strip">
+      <button
+        type="button"
+        className={clsx('cmd-tile', !micMuted.value ? 'cmd-ok' : 'cmd-danger')}
+        disabled={!online}
+        onClick={() => micMuted.commit(!micMuted.value)}
+      >
+        <div className="cmd-icon">
+          {micMuted.value ? <MicOff size={18} /> : <Mic size={18} />}
         </div>
-      ) : (
-        <p className="muted small">No alarms set.</p>
-      )}
-      {(timers > 0 || due > 0) && (
-        <div className="next-extra">
-          {timers > 0 && <a className="link" href="#/schedules/timers">{timers === 1 ? '1 timer running' : `${timers} timers running`}</a>}
-          {due > 0 && <a className="link" href="#/schedules/reminders">{due === 1 ? '1 reminder due' : `${due} reminders due`}</a>}
+        <div className="cmd-text">
+          <span className="cmd-title">{micMuted.value ? 'Mic: Muted' : 'Mic: Listening'}</span>
+          <span className="cmd-sub">{micMuted.value ? 'Wake word ignored' : 'Wake word active'}</span>
         </div>
-      )}
-    </Card>
+      </button>
+
+      <button
+        type="button"
+        className={clsx('cmd-tile', ledOn && 'cmd-accent')}
+        disabled={!online}
+        onClick={() => led.commit({ ...led.value, mode: ledOn ? 0 : LED_MODES.indexOf('solid') })}
+      >
+        <div className="cmd-icon">
+          {ledOn ? <Lightbulb size={18} /> : <LightbulbOff size={18} />}
+        </div>
+        <div className="cmd-text">
+          <span className="cmd-title">{ledOn ? `Light: ${ledModeName}` : 'Light: Off'}</span>
+          <span className="cmd-sub">{ledOn ? 'WS2812 ring on' : 'Tap to turn on'}</span>
+        </div>
+      </button>
+
+      <a href="#/schedules" className="cmd-tile">
+        <div className="cmd-icon">
+          <AlarmClock size={18} />
+        </div>
+        <div className="cmd-text">
+          <span className="cmd-title">{next ? `Alarm: ${timeOf(next)}` : 'No Alarms'}</span>
+          <span className="cmd-sub">{next ? formatUntil(next.next_fire - now) : 'Tap to view schedules'}</span>
+        </div>
+      </a>
+    </div>
   );
 }
 
@@ -136,36 +181,7 @@ function AssistantStatus() {
         <div className={clsx('orb', active && `orb-${snapshot.assistant.state}`)} />
         <div>
           <Pill tone={st.tone} pulse={active}>{assistantLabel(snapshot)}</Pill>
-          <p className="muted small">Say the wake word to start a conversation.</p>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function QuickControls() {
-  const { online, controls } = useNexus();
-  const { volume, micMuted, led } = controls;
-  const ledOn = led.value.mode !== 0;
-  return (
-    <Card title="Quick controls">
-      <div className="quick">
-        <div className="quick-volume">
-          <Volume2 size={18} />
-          <CommitSlider min={0} max={100} value={volume.value} disabled={!online} onCommit={volume.commit} aria-label="Volume" />
-          <span className="mono small">{volume.value}%</span>
-        </div>
-        <div className="quick-toggles">
-          <button className={clsx('chip-toggle', !micMuted.value && 'is-on')} disabled={!online} onClick={() => micMuted.commit(!micMuted.value)}>
-            {micMuted.value ? <MicOff size={16} /> : <Mic size={16} />} {micMuted.value ? 'Mic off' : 'Mic on'}
-          </button>
-          <button
-            className={clsx('chip-toggle', ledOn && 'is-on')}
-            disabled={!online}
-            onClick={() => led.commit({ ...led.value, mode: ledOn ? 0 : LED_MODES.indexOf('solid') })}
-          >
-            {ledOn ? <Lightbulb size={16} /> : <LightbulbOff size={16} />} {ledOn ? 'Light on' : 'Light off'}
-          </button>
+          <p className="muted small">Say the wake word to start a conversation, or open chat.</p>
         </div>
       </div>
     </Card>
@@ -192,21 +208,51 @@ function Health() {
   );
 }
 
+function UpNext() {
+  const { snapshot } = useNexus();
+  const { queue, queue_length: total } = snapshot.music;
+
+  if (queue.length === 0) return null;
+
+  return (
+    <Card
+      title="Up next"
+      icon={ListMusic}
+      action={<a className="link" href="#/music/queue">Queue <ChevronRight size={14} /></a>}
+    >
+      <ol className="mini-list">
+        {queue.slice(0, 4).map((t, i) => (
+          <li key={`${t.id}-${i}`}>
+            <TrackArt id={t.id} size="sm" />
+            <div className="mini-text">
+              <span className="ellipsis">{t.title}</span>
+              <span className="muted small ellipsis">{t.artist}</span>
+            </div>
+          </li>
+        ))}
+        {total > 4 && <li className="muted small more">+{total - 4} more</li>}
+      </ol>
+    </Card>
+  );
+}
+
 export default function Home() {
   return (
-    <div className="home-grid">
-      <div className="home-main">
-        <NowPlaying />
-        <div className="two-col">
-          <AssistantStatus />
-          <NextAlarm />
-        </div>
+    <div className="home-layout">
+      {/* Zone 1: Sound Stage */}
+      <NowPlaying />
+
+      {/* Zone 2: Command Strip */}
+      <CommandStrip />
+
+      {/* Zone 3: Dual Operations */}
+      <div className="home-split">
+        <AssistantStatus />
         <Health />
       </div>
-      <div className="home-side">
-        <QuickControls />
-        <UpNext />
-      </div>
+
+      {/* Zone 4: Up Next (if any) */}
+      <UpNext />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import React from 'react';
 import clsx from 'clsx';
-import { Volume2, Mic, Lightbulb } from 'lucide-react';
-import { Card, PageHeader, Switch } from '../components/ui';
+import { Volume2, Mic, Lightbulb, Speaker as SpeakerIcon, Bluetooth, Laptop } from 'lucide-react';
+import { Button, Card, PageHeader, Switch } from '../components/ui';
 import CommitSlider from '../components/CommitSlider';
 import { useNexus, LED_MODES } from '../DeviceContext';
+import { useAudioOutputs } from '../hooks/useAudioOutputs';
 import AlertSounds from '../components/AlertSounds';
 
 const PRESETS = ['#ffffff', '#ffb45c', '#ff5c5c', '#ff5cc8', '#8b7bff', '#5c9dff', '#3ee0c8', '#6ae36a'];
@@ -30,7 +31,9 @@ function SliderRow({ label, value, unit, ...props }) {
 
 export default function Device() {
   const { online, controls } = useNexus();
-  const { volume, bass, treble, micGain, micMuted, led } = controls;
+  const { bass, treble, micGain, micMuted, led } = controls;
+  // Volume follows the active speaker; each speaker keeps its own level.
+  const { speakers, activeOutput, activeVolume: volume, selectSpeaker, busy } = useAudioOutputs();
   const disabled = !online;
   const mode = LED_MODES[led.value.mode] || 'off';
   const colorHex = rgbToHex(led.value.color);
@@ -43,8 +46,59 @@ export default function Device() {
     <>
       <PageHeader title="Device" subtitle="Speaker, microphone, light and sounds." />
       <div className={clsx('device-grid', disabled && 'is-offline')}>
-        <Card title="Speaker" icon={Volume2}>
-          <SliderRow label="Volume" value={volume.value} unit="%" min={0} max={100} disabled={disabled} onCommit={volume.commit} />
+        <Card title="Speaker & Output" icon={Volume2}>
+          <div className="speaker-output-block">
+            <div className="speaker-output-head">
+              <span className="field-label">Active Speaker</span>
+              <span className="pill pill-ok">{activeOutput.name}</span>
+            </div>
+            <div className="speaker-tiles">
+              {speakers.map((spk) => {
+                const Icon = spk.type === 'bluetooth' ? Bluetooth : spk.type === 'satellite' ? Laptop : SpeakerIcon;
+                const isCurrent = spk.active;
+                return (
+                  <div
+                    key={spk.id}
+                    className={clsx('speaker-tile', isCurrent && 'is-active')}
+                    onClick={() => !isCurrent && selectSpeaker(spk)}
+                  >
+                    <div className="speaker-tile-left">
+                      <div className="speaker-tile-icon">
+                        <Icon size={16} />
+                      </div>
+                      <div className="speaker-tile-body">
+                        <span className="speaker-tile-name">{spk.name}</span>
+                        <span className="muted small">
+                          {spk.description}
+                          {typeof spk.volume === 'number' && ` · ${spk.volume}%`}
+                        </span>
+                      </div>
+                    </div>
+                    {isCurrent ? (
+                      <span className="pill pill-ok">Active</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        busy={busy}
+                        disabled={disabled || busy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectSpeaker(spk);
+                        }}
+                      >
+                        Select
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          <SliderRow label={`Volume · ${activeOutput.name}`} value={volume.value} unit="%" min={0} max={100} disabled={disabled} onCommit={volume.commit} />
           <div className="chips">
             {[10, 30, 50, 70, 100].map((v) => (
               <button key={v} className={clsx('chip', volume.value === v && 'is-active')} disabled={disabled} onClick={() => volume.commit(v)}>{v}%</button>

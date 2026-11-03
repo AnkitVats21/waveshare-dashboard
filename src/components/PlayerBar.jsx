@@ -9,6 +9,7 @@ import OutputPicker from './OutputPicker';
 import { IconButton } from './ui';
 import { TrackArt, useTrackInfo } from './Track';
 import { useNexus } from '../DeviceContext';
+import { useAudioOutputs } from '../hooks/useAudioOutputs';
 import { formatClock } from '../lib/format';
 import { looksLikeVideoId } from '../lib/trackMetadata';
 
@@ -64,7 +65,9 @@ function CacheBadge({ cache }) {
 export default function PlayerBar() {
   const { snapshot, online, act, currentTrack, controls } = useNexus();
   const { music } = snapshot;
-  const { volume, repeat, autoplay } = controls;
+  const { repeat, autoplay } = controls;
+  // The speaker the music plays on (the board's, or a hub speaker's own).
+  const { activeVolume: volume } = useAudioOutputs();
   const playing = music.state === 'PLAYING';
   const busy = music.state === 'RESOLVING' || music.state === 'BUFFERING';
   const hasTrack = !!(currentTrack?.id || currentTrack?.title);

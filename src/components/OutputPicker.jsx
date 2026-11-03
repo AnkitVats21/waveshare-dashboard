@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Speaker, Laptop, Check } from 'lucide-react';
-import { IconButton } from './ui';
+import { Speaker, Laptop, Bluetooth, Check, Loader2 } from 'lucide-react';
 import { useNexus } from '../DeviceContext';
+import { useAudioOutputs } from '../hooks/useAudioOutputs';
 
-// Where the music plays: the board's speaker, or a satellite (nexus-orbit on a
-// PC or Pi, connected to /api/orbit/ws). Picking one moves the current song
-// there at its position. Hidden while no satellite is connected.
+const ICON_MAP = {
+  internal: Speaker,
+  bluetooth: Bluetooth,
+  satellite: Laptop,
+};
+
 export default function OutputPicker() {
-  const { snapshot, online, send } = useNexus();
-  const orbit = snapshot.orbit;
-  const satellites = orbit?.satellites || [];
+  const { online } = useNexus();
+  const { speakers, activeOutput, selectSpeaker, busy, busyMsg } = useAudioOutputs();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -26,48 +28,54 @@ export default function OutputPicker() {
     };
   }, [open]);
 
-  if (!satellites.length) return null;
-
-  const onSatellite = snapshot.music.output === 'satellite';
-  const active = onSatellite ? satellites.find((s) => s.active) : null;
-  const choose = (target) => {
-    send('orbit_set_target', { target });
-    setOpen(false);
-  };
-  const options = [
-    { id: 'local', name: 'Nexus speaker', icon: Speaker, selected: !onSatellite },
-    ...satellites.map((s) => ({ id: s.id, name: s.name, icon: Laptop, selected: !!active && s.id === active.id })),
-  ];
+  const ActiveIcon = ICON_MAP[activeOutput.type] || Speaker;
 
   return (
     <div className="output-picker" ref={ref}>
-      <IconButton
-        icon={active ? Laptop : Speaker}
-        label={active ? `Playing on ${active.name}` : 'Playing on the Nexus speaker'}
-        active={!!active}
-        size={16}
-        disabled={!online}
+      <button
+        type="button"
+        className={clsx('output-pill-btn', activeOutput.type !== 'internal' && 'is-external')}
+        disabled={!online || busy}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-      />
+        title={`Audio playing on: ${activeOutput.name} (Click to switch speaker)`}
+      >
+        {busy ? <Loader2 size={14} className="spin" /> : <ActiveIcon size={14} />}
+        <span className="output-pill-text">{activeOutput.name}</span>
+      </button>
+
       {open && (
         <div className="output-menu" role="menu">
-          <div className="output-menu-title">Play music on</div>
-          {options.map(({ id, name, icon: Icon, selected }) => (
-            <button
-              key={id}
-              role="menuitemradio"
-              aria-checked={selected}
-              className={clsx('output-option', selected && 'is-selected')}
-              onClick={() => choose(id)}
-            >
-              <Icon size={16} />
-              <span className="output-name">{name}</span>
-              {selected && <Check size={14} />}
-            </button>
-          ))}
-          {active && <div className="output-menu-hint">The volume slider sets the Nexus speaker, not {active.name}.</div>}
+          <div className="output-menu-title">Choose Output Speaker</div>
+          {busyMsg && <div className="output-menu-hint">{busyMsg}</div>}
+          <div className="output-menu-list">
+            {speakers.map((spk) => {
+              const SpkIcon = ICON_MAP[spk.type] || Speaker;
+              const isSelected = spk.active;
+              return (
+                <button
+                  key={spk.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isSelected}
+                  className={clsx('output-option', isSelected && 'is-selected')}
+                  disabled={busy}
+                  onClick={async () => {
+                    if (!isSelected) await selectSpeaker(spk);
+                    setOpen(false);
+                  }}
+                >
+                  <SpkIcon size={16} />
+                  <div className="output-option-text">
+                    <span className="output-name">{spk.name}</span>
+                    <span className="output-desc">{spk.description}</span>
+                  </div>
+                  {isSelected && <Check size={14} className="output-check" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

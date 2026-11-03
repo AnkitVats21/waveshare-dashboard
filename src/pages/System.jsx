@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import {
   Cpu, Wifi, HardDrive, Package, Globe, Power, Terminal, Upload, RotateCcw, Pause, Play, Trash2, Link2, MemoryStick,
 } from 'lucide-react';
-import { Banner, Button, Card, Meter, PageHeader, Pill, Row, Stat } from '../components/ui';
+import { Banner, Button, Card, Meter, PageHeader, Pill, Row, Segmented, Stat } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useNexus } from '../DeviceContext';
 import { usePoll } from '../hooks/usePoll';
@@ -402,25 +402,56 @@ function Logs() {
   );
 }
 
+const SYSTEM_SUBS = [
+  { value: 'overview', label: 'Overview', icon: Cpu },
+  { value: 'updates', label: 'Updates', icon: Upload },
+  { value: 'logs', label: 'Console', icon: Terminal },
+];
+
 export default function System() {
+  const [sub, setSub] = useState(() => {
+    const raw = window.location.hash.replace(/^#\/?/, '').split('/')[1];
+    return ['overview', 'updates', 'logs'].includes(raw) ? raw : 'overview';
+  });
+
+  const change = (v) => {
+    window.history.replaceState(null, '', `#/system/${v}`);
+    setSub(v);
+  };
+
   return (
     <>
-      <PageHeader title="System" subtitle="Health, updates and diagnostics." />
-      <div className="system-grid">
-        <div className="stack">
-          <Health />
-          <Firmware />
-          <Controls />
+      <PageHeader title="System" subtitle="Health, updates and diagnostics.">
+        <Segmented value={sub} onChange={change} options={SYSTEM_SUBS} />
+      </PageHeader>
+
+      {sub === 'overview' && (
+        <div className="system-grid">
+          <div className="stack">
+            <Health />
+            <Controls />
+            <HubCard />
+            <BluetoothCard />
+          </div>
+          <div className="stack">
+            <Network />
+            <Flash />
+          </div>
         </div>
-        <div className="stack">
-          <Network />
-          <HubCard />
-          <BluetoothCard />
-          <Flash />
+      )}
+
+      {sub === 'updates' && (
+        <div className="system-grid">
+          <Firmware />
           <WebApp />
         </div>
-        <Logs />
-      </div>
+      )}
+
+      {sub === 'logs' && (
+        <div className="system-logs-view">
+          <Logs />
+        </div>
+      )}
     </>
   );
 }
