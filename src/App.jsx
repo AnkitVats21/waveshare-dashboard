@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { Home as HomeIcon, Music2, Sparkles, AlarmClock, Mic, SlidersHorizontal, Cpu, Moon, Sun, Monitor } from 'lucide-react';
+import { Home as HomeIcon, Music2, Sparkles, AlarmClock, Mic, SlidersHorizontal, Cpu, Moon, Sun, Monitor, MoreHorizontal, X } from 'lucide-react';
 import { useNexus } from './DeviceContext';
 import PlayerBar from './components/PlayerBar';
 import AlarmRinging from './components/AlarmRinging';
-import HealthPanel from './components/HealthPanel';
 import Home from './pages/Home';
 import Music from './pages/Music';
 import Assistant from './pages/Assistant';
@@ -22,6 +21,9 @@ export const PAGES = [
   { id: 'device', label: 'Device', icon: SlidersHorizontal, component: Device },
   { id: 'system', label: 'System', icon: Cpu, component: System },
 ];
+
+const PRIMARY_MOBILE_IDS = ['home', 'music', 'assistant'];
+const MORE_PAGES = PAGES.filter((p) => !PRIMARY_MOBILE_IDS.includes(p.id));
 
 // Old links (#/alarms/...) open the Schedules page.
 const ALIASES = { alarms: 'schedules' };
@@ -74,10 +76,14 @@ function ConnectionBadge() {
 export default function App() {
   const [page, setPage] = useState(pageFromHash);
   const [theme, cycleTheme] = useTheme();
+  const [moreOpen, setMoreOpen] = useState(false);
   const { snapshot } = useNexus();
 
   useEffect(() => {
-    const onHash = () => setPage(pageFromHash());
+    const onHash = () => {
+      setPage(pageFromHash());
+      setMoreOpen(false);
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -88,6 +94,7 @@ export default function App() {
 
   const Current = PAGES.find((p) => p.id === page).component;
   const ThemeIcon = THEME_ICONS[theme];
+  const isMoreActive = MORE_PAGES.some((p) => p.id === page);
 
   return (
     <div className="app">
@@ -110,7 +117,6 @@ export default function App() {
             </a>
           ))}
         </nav>
-        <HealthPanel />
         <div className="sidebar-footer">
           <ConnectionBadge />
           <button className="icon-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}>
@@ -141,13 +147,52 @@ export default function App() {
 
       <PlayerBar />
 
+      {/* Mobile More Drawer */}
+      {moreOpen && (
+        <div className="more-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="more-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="more-sheet-head">
+              <span>More Pages</span>
+              <button className="icon-btn" onClick={() => setMoreOpen(false)} aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="more-grid">
+              {MORE_PAGES.map((p) => (
+                <a
+                  key={p.id}
+                  href={`#/${p.id}`}
+                  className={clsx('more-item', page === p.id && 'is-active')}
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <div className="more-icon">
+                    <p.icon size={22} />
+                  </div>
+                  <span>{p.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile 4-tab bar */}
       <nav className="tabbar">
-        {PAGES.map((p) => (
-          <a key={p.id} href={`#/${p.id}`} className={clsx('tab', page === p.id && 'is-active')}>
+        {PAGES.filter((p) => PRIMARY_MOBILE_IDS.includes(p.id)).map((p) => (
+          <a key={p.id} href={`#/${p.id}`} className={clsx('tab', page === p.id && !moreOpen && 'is-active')}>
             <p.icon size={20} />
-            <span>{p.short || p.label}</span>
+            <span>{p.label}</span>
           </a>
         ))}
+        <button
+          type="button"
+          className={clsx('tab', (isMoreActive || moreOpen) && 'is-active')}
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+        >
+          <MoreHorizontal size={20} />
+          <span>More</span>
+        </button>
       </nav>
     </div>
   );
